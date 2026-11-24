@@ -105,6 +105,22 @@
     };
   }
 
+  function makeDemoEvents() {
+    const dateAfter = days => { const date = new Date(); date.setDate(date.getDate() + days); return localDateString(date); };
+    const createdAt = new Date().toISOString();
+    return [
+      { id:'DEMO-EVT-001', title:'AI & Innovation Buildathon 2026', type:'Competition', date:dateAfter(10), time:'09:30', signupDeadline:dateAfter(7), venue:'Innovation Lab, ITM University Campus, Gwalior',
+        description:'A one-day, inter-department buildathon where student teams identify a practical campus or community problem and build a working technology prototype. Suggested tracks: AI for everyday life, smart campus solutions, sustainability and assistive technology. Schedule: 09:30 check-in and team briefing; 10:00 idea pitch; 11:00–14:00 build sprint; 14:30 prototype demos; 16:00 jury feedback and closing. Students should bring a laptop, charger and college ID. Teams of 2–4 students are welcome; individual entries can be grouped at check-in. Judging considers problem clarity, usefulness, working prototype and presentation. Participation certificates are planned for registered participants.',
+        organiser:'Department of Computer Science & Intelligent Systems', eligibility:'All currently enrolled students; teams of 2–4 preferred', requirements:'College ID, laptop and charger; bring any required project materials', signups:[], marks:'', createdAt, createdBy:'Ace Records Demo Activities', createdByEmail:'admin@itmuni.in' },
+      { id:'DEMO-EVT-002', title:'Career Readiness: Resume & Mock Interview Workshop', type:'Workshop', date:dateAfter(17), time:'11:00', signupDeadline:dateAfter(14), venue:'Seminar Hall, ITM University Campus, Gwalior',
+        description:'A practical career-preparation session covering resume structure, writing achievement-focused bullet points, presenting academic projects, professional email etiquette and common placement interview questions. Schedule: 11:00 welcome and resume checklist; 11:20 resume review examples; 12:00 mock interview practice in small groups; 13:00 feedback and action plan. Participants should bring a printed or digital copy of their current resume and one project or achievement they would like to discuss. Students from every programme and year may register. Seats are intended for the first 60 registrations.',
+        organiser:'Training & Placement Cell', eligibility:'All courses and academic years; especially useful for students preparing for internships or placements', requirements:'Bring a current resume and college ID; laptop optional', signups:[], marks:'', capacity:60, createdAt, createdBy:'Ace Records Demo Activities', createdByEmail:'admin@itmuni.in' },
+      { id:'DEMO-EVT-003', title:'Inter-Department Sports & Cultural Day', type:'Cultural', date:dateAfter(24), time:'09:00', signupDeadline:dateAfter(20), venue:'University Sports Ground & Open-Air Stage, ITM University Campus, Gwalior',
+        description:'A campus celebration bringing departments together through friendly sports and cultural activities. Planned programme: 09:00 registration and opening; 09:30 team relays and badminton rounds; 11:30 music, dance and open-mic performances; 13:00 lunch break; 14:00 finals and department showcases; 16:00 prize distribution. Students may register for one sports activity, one cultural performance, or attend as audience members. Team events require the full team to be named at registration. Performers should bring their own track or presentation file in a USB drive and report 30 minutes before their slot. Final schedules will be shared with registered students.',
+        organiser:'Student Activities & Sports Committee', eligibility:'All currently enrolled students; performance and team-event slots are subject to availability', requirements:'College ID; sports participants should bring suitable sportswear; performers should bring their audio file', signups:[], marks:'', createdAt, createdBy:'Ace Records Demo Activities', createdByEmail:'admin@itmuni.in' }
+    ];
+  }
+
   function seedDatabase() {
     const students = studentSeed.map(makeSeedStudent);
     const faculty = [
@@ -115,7 +131,7 @@
     const admin = { id: 'ADM001', email: 'admin@itmuni.in', password: DEMO_PASSWORD, role: 'admin', name: 'Ace Records Administrator', phone: '9000000200', department: 'Administration', course: 'University Administration' };
     const users = [admin, ...faculty, ...students.map(student => ({ email: student.profile.email, password: DEMO_PASSWORD, role: 'student', name: student.profile.name, studentId: student.id }))];
     return {
-      version: 5, users, students, events: [], requests: [],
+      version: 6, users, students, events: makeDemoEvents(), requests: [],
       logs: [{ id: 'LOG-INIT', timestamp: new Date().toISOString(), actor: 'Ace Records', role: 'system', action: 'DEMO WORKSPACE CREATED', studentId: '', details: 'Three faculty and twenty student example accounts are loaded. All sample accounts use the shared demonstration password.' }]
     };
   }
@@ -162,6 +178,9 @@
       event.signups = Array.isArray(event.signups) ? event.signups : [];
       event.signupDeadline = event.signupDeadline || event.date || '';
     });
+    makeDemoEvents().forEach(demoEvent => {
+      if (!parsed.events.some(event => event.id === demoEvent.id)) parsed.events.push(demoEvent);
+    });
     parsed.requests = Array.isArray(parsed.requests) ? parsed.requests : [];
     parsed.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
 
@@ -176,7 +195,7 @@
         student.academics.semesters?.[index] || ({ label: `Semester ${index + 1}`, sgpa: '', credits: '', attendance: '', backlogs: 0 })
       );
     });
-    parsed.version = 5;
+    parsed.version = 6;
     return parsed;
   }
 
@@ -346,10 +365,6 @@
     const emoji = ({ Volunteering:'🤝', Workshop:'🧠', Competition:'🏆', Club:'🎨', Internship:'💼', Project:'🛠️', Sports:'⚽', Certificate:'📜' })[activity.type] || '✦';
     return `<div class="activity-row"><span class="activity-dot">${emoji}</span><div><strong>${escapeHTML(activity.title)}</strong><small>${escapeHTML(activity.type)} · ${formatDate(activity.date)}${activity.description ? ` · ${escapeHTML(activity.description)}` : ''}</small></div></div>`;
   }
-  function eventCard(event, allowActions = false) {
-    return `<article class="request-card"><div><h4>${escapeHTML(event.title)}</h4><p><strong>${escapeHTML(event.type || 'College activity')}</strong> · ${formatDate(event.date)}${event.time ? ` · ${escapeHTML(event.time)}` : ''}</p><p>📍 ${escapeHTML(event.venue || 'Venue to be announced')}</p><p>${escapeHTML(event.description || '')}</p>${event.marks !== '' && event.marks !== null && event.marks !== undefined ? `<div class="request-meta"><span class="pill">Marks / points: ${escapeHTML(event.marks)}</span></div>` : ''}</div>${allowActions ? `<div class="request-actions"><button class="tiny-btn" data-action="edit-event" data-id="${event.id}">Edit</button><button class="tiny-btn danger" data-action="delete-event" data-id="${event.id}">Delete</button></div>` : ''}</article>`;
-  }
-
   function eventCard(event, allowActions = false, allowSignup = false) {
     const signups = Array.isArray(event.signups) ? event.signups : [];
     const studentId = activeUser?.studentId;
@@ -357,15 +372,19 @@
     const today = localDateString();
     const deadline = event.signupDeadline || event.date;
     const registrationClosed = today > deadline || today > event.date;
+    const capacityReached = Number(event.capacity) > 0 && signups.length >= Number(event.capacity);
     return `<article class="request-card"><div>
       <h4>${escapeHTML(event.title)}</h4>
       <p><strong>${escapeHTML(event.type || 'College activity')}</strong> · ${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')}</p>
       <p>📍 ${escapeHTML(event.venue || 'Venue to be announced')}</p>
       <p>${escapeHTML(event.description || '')}</p>
-      <div class="request-meta"><span class="pill">Registration closes: ${formatDate(deadline)}</span><span class="pill">${signups.length} signed up</span>${event.marks !== '' && event.marks !== null && event.marks !== undefined ? `<span class="pill">Marks / points: ${escapeHTML(event.marks)}</span>` : ''}</div>
+      <div class="request-meta"><span class="pill">Registration closes: ${formatDate(deadline)}</span><span class="pill">${signups.length}${event.capacity ? ' / ' + event.capacity : ''} signed up</span>${event.organiser ? `<span class="pill">Organiser: ${escapeHTML(event.organiser)}</span>` : ''}</div>
+      ${event.eligibility ? `<p><strong>Who can join:</strong> ${escapeHTML(event.eligibility)}</p>` : ''}
+      ${event.requirements ? `<p><strong>Bring / prepare:</strong> ${escapeHTML(event.requirements)}</p>` : ''}
+      ${event.marks !== '' && event.marks !== null && event.marks !== undefined ? `<div class="request-meta"><span class="pill">Marks / points: ${escapeHTML(event.marks)}</span></div>` : ''}
     </div>
     ${allowActions ? `<div class="request-actions"><button class="tiny-btn" data-action="edit-event" data-id="${event.id}">Edit</button><button class="tiny-btn danger" data-action="delete-event" data-id="${event.id}">Delete</button></div>` : ''}
-    ${allowSignup ? `<div class="request-actions">${registered ? '<span class="pill approved">Signed up ✓</span><button class="tiny-btn danger" data-action="cancel-signup" data-id="' + event.id + '">Cancel sign-up</button>' : registrationClosed ? '<span class="pill rejected">Registration closed</span>' : '<button class="btn btn-blue btn-small" data-action="signup-event" data-id="' + event.id + '">Sign up →</button>'}</div>` : ''}
+    ${allowSignup ? `<div class="request-actions">${registered ? '<span class="pill approved">Signed up ✓</span><button class="tiny-btn danger" data-action="cancel-signup" data-id="' + event.id + '">Cancel sign-up</button>' : registrationClosed ? '<span class="pill rejected">Registration closed</span>' : capacityReached ? '<span class="pill rejected">Fully booked</span>' : '<button class="btn btn-blue btn-small" data-action="signup-event" data-id="' + event.id + '">Sign up →</button>'}</div>` : ''}
     </article>`;
   }
 
@@ -541,6 +560,7 @@
       const deadline = event.signupDeadline || event.date;
       if (today > deadline || today > event.date) return toast('Registration for this activity has closed.', 'error');
       if (registered) return toast('You are already signed up for this activity.', 'error');
+      if (Number(event.capacity) > 0 && event.signups.length >= Number(event.capacity)) return toast('This activity has reached its registration limit.', 'error');
       event.signups.push({ studentId, signedUpAt: new Date().toISOString() });
       logAction('ACTIVITY SIGN-UP', `Signed up for ${event.title}; event date ${event.date}.`, studentId, { eventId: event.id });
     }
