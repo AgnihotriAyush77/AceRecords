@@ -9,7 +9,6 @@
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   let db;
   let activeUser = null;
-  let selectedRole = 'student';
   let currentView = 'dashboard';
   let focusedStudentId = null;
   let correctionFilterStudentId = ''; 
@@ -277,7 +276,8 @@
           <button class="btn btn-blue btn-small" data-view="students">Browse student directory</button>
           <button class="btn btn-plain btn-small" data-view="approvals">Open approval inbox</button>
           <button class="btn btn-plain btn-small" data-view="activities">View activities</button>
-          ${isAdmin ? '<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button><button class="btn btn-plain btn-small" data-view="faculty">Manage faculty</button><button class="btn btn-plain btn-small" data-action="add-event">＋ Create activity</button>' : ''}
+          ${isAdmin ? '<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button><button class="btn btn-plain btn-small" data-view="faculty">Manage faculty</button>' : ''}
+          <button class="btn btn-plain btn-small" data-action="add-event">＋ Create activity</button>
           <button class="btn btn-plain btn-small" data-action="export">⇩ Export records</button>
         </div>`;
     }
@@ -347,9 +347,10 @@
     const upcoming = events.filter(event => !event.date || event.date >= today);
     if (activeUser.role === 'admin' || activeUser.role === 'faculty') {
       const isAdmin = activeUser.role === 'admin';
-      return `${pageHeading(isAdmin ? 'Activities & events' : 'College activities', isAdmin ? 'Publish and manage activities students can sign up for.' : 'View activities published for students.', isAdmin ? '<button class="btn btn-blue btn-small" data-action="add-event">＋ Create activity</button>' : '')}
-        <section class="panel"><div class="panel-heading"><h3>Upcoming activities (${upcoming.length})</h3><span class="pill">${isAdmin ? 'Admin managed' : 'View only'}</span></div>${upcoming.length ? upcoming.map(event => eventCard(event, isAdmin, false)).join('') : '<div class="empty-state"><b>No upcoming activities</b>Published activities will appear here.</div>'}</section>
-        ${isAdmin ? `<section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Past activities (${events.length-upcoming.length})</h3></div>${events.filter(event => event.date && event.date < today).length ? events.filter(event => event.date && event.date < today).map(event => eventCard(event, true, false)).join('') : '<div class="empty-state">No past activities.</div>'}</section>` : ''}`;
+      const headingAction = '<button class="btn btn-blue btn-small" data-action="add-event">＋ Create activity</button>';
+      return `${pageHeading(isAdmin ? 'Activities & events' : 'College activities', isAdmin ? 'Publish and manage activities students can sign up for.' : 'Create activities for students and manage the ones you publish.', headingAction)}
+        <section class="panel"><div class="panel-heading"><h3>Upcoming activities (${upcoming.length})</h3><span class="pill">${isAdmin ? 'Admin & faculty managed' : 'Faculty managed'}</span></div>${upcoming.length ? upcoming.map(event => eventCard(event, canManageEvent(event), false)).join('') : '<div class="empty-state"><b>No upcoming activities</b>Create an activity for students to sign up for.</div>'}</section>
+        ${isAdmin ? `<section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Past activities (${events.length-upcoming.length})</h3></div>${events.filter(event => event.date && event.date < today).length ? events.filter(event => event.date && event.date < today).map(event => eventCard(event, canManageEvent(event), false)).join('') : '<div class="empty-state">No past activities.</div>'}</section>` : ''}`;
     }
     const student = getCurrentStudent();
     const registrations = events.filter(event => (event.signups || []).some(entry => entry.studentId === student?.id));
@@ -358,7 +359,7 @@
       <section class="panel"><div class="panel-heading"><h3>My signed-up activities (${registrations.length})</h3><span class="pill">Your registrations</span></div>
         ${registrations.length ? registrations.map(event => `<div class="activity-row"><span class="activity-dot">✓</span><div><strong>${escapeHTML(event.title)}</strong><small>${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')} · Registration deadline ${formatDate(event.signupDeadline || event.date)}</small></div><span class="pill">${event.date < today ? 'Completed' : 'Upcoming'}</span></div>`).join('') : '<div class="empty-state"><b>You have not signed up for an activity yet.</b>Choose an activity below to register.</div>'}
       </section>
-      <section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Activities open for sign-up (${openActivities.filter(event => today <= (event.signupDeadline || event.date)).length})</h3><span class="pill">Published by Admin</span></div>
+      <section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Activities open for sign-up (${openActivities.filter(event => today <= (event.signupDeadline || event.date)).length})</h3><span class="pill">Published by staff</span></div>
         ${openActivities.length ? openActivities.map(event => eventCard(event, false, true)).join('') : '<div class="empty-state">No other upcoming activities are available right now.</div>'}
       </section>
       <div class="notice" style="margin-top:16px"><strong>Keep an eye on the dates:</strong> Each activity shows its event date and the last date to sign up. Once the registration deadline passes, sign-up closes.</div>`;
@@ -443,10 +444,16 @@
     if (saveDatabase()) { renderView(); toast('Faculty account deleted.'); }
   }
 
+  function canManageEvent(event) {
+    if (!event || !activeUser) return false;
+    return activeUser.role === 'admin' || (activeUser.role === 'faculty' && (event.createdByEmail === activeUser.email || (!event.createdByEmail && event.createdBy === activeUser.name)));
+  }
+
   function openEventModal(id = '') {
-    if (activeUser?.role !== 'admin') return toast('Only an administrator can publish activities.', 'error');
+    if (!['admin','faculty'].includes(activeUser?.role)) return toast('Only faculty or an administrator can publish activities.', 'error');
     const existing = id ? db.events.find(event => event.id === id) : null;
     if (id && !existing) return;
+    if (existing && !canManageEvent(existing)) return toast('You can only edit activities you created.', 'error');
     const body = `<form id="modalForm"><div class="form-grid">
       <div class="field"><label>Activity title *</label><input name="title" value="${escapeHTML(existing?.title || '')}" required /></div>
       <div class="field"><label>Activity type *</label><select name="type">${['Workshop','Seminar','Competition','Cultural','Sports','Guest Lecture','Club','Other'].map(type => `<option ${existing?.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div>
@@ -469,20 +476,21 @@
       if (values.signupDeadline > values.date) return toast('The registration deadline cannot be after the activity date.', 'error');
       if (existing) {
         Object.assign(existing, values);
-        logAction('COLLEGE ACTIVITY EDITED', `Admin updated activity ${existing.title}; registration deadline ${existing.signupDeadline}.`);
+        logAction('COLLEGE ACTIVITY EDITED', `${activeUser.role === 'admin' ? 'Admin' : 'Faculty'} updated activity ${existing.title}; registration deadline ${existing.signupDeadline}.`);
       } else {
-        const event = { id: `EVT-${Date.now()}`, ...values, signups: [], createdAt: new Date().toISOString(), createdBy: activeUser.name };
+        const event = { id: `EVT-${Date.now()}`, ...values, signups: [], createdAt: new Date().toISOString(), createdBy: activeUser.name, createdByEmail: activeUser.email };
         db.events.unshift(event);
-        logAction('COLLEGE ACTIVITY CREATED', `Admin published ${event.title} for ${event.date}; registration closes ${event.signupDeadline}.`);
+        logAction('COLLEGE ACTIVITY CREATED', `${activeUser.role === 'admin' ? 'Admin' : 'Faculty'} published ${event.title} for ${event.date}; registration closes ${event.signupDeadline}.`);
       }
       if (saveDatabase()) { closeModal(); renderView(); toast(existing ? 'Activity updated.' : 'Activity published.'); }
     });
   }
 
   function deleteEvent(id) {
-    if (activeUser?.role !== 'admin') return toast('Only an administrator can remove activities.', 'error');
+    if (!['admin','faculty'].includes(activeUser?.role)) return toast('Only staff can remove activities.', 'error');
     const event = db.events.find(item => item.id === id);
     if (!event) return;
+    if (!canManageEvent(event)) return toast('You can only delete activities you created.', 'error');
     if (!window.confirm(`Delete the college activity “${event.title}”?`)) return;
     db.events = db.events.filter(item => item.id !== id);
     logAction('COLLEGE ACTIVITY DELETED', `Deleted activity ${event.title} scheduled for ${event.date}.`);
@@ -534,11 +542,26 @@
   }
 
   function renderStudents() {
-    const rows = db.students.map(s => `<tr><td><strong>${escapeHTML(s.profile.name)}</strong><br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.email)}</span></td><td>${escapeHTML(s.id)}<br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.rollNo)}</span></td><td>${escapeHTML(s.profile.course)}</td><td>${escapeHTML(s.profile.department)}</td><td>Year ${escapeHTML(s.profile.currentYear)}</td><td>${averageAttendance(s)}%</td><td><strong>${cgpa(s)}</strong></td><td><div class="table-actions"><button class="tiny-btn" data-action="view-student" data-id="${s.id}">View</button><button class="tiny-btn" data-action="edit-student" data-id="${s.id}">Edit</button></div></td></tr>`).join('');
+    const rows = db.students.map(s => `<tr><td><strong>${escapeHTML(s.profile.name)}</strong><br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.email)}</span></td><td>${escapeHTML(s.id)}<br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.rollNo)}</span></td><td>${escapeHTML(s.profile.course)}</td><td>${escapeHTML(s.profile.department)}</td><td>Year ${escapeHTML(s.profile.currentYear)}</td><td>${averageAttendance(s)}%</td><td><strong>${cgpa(s)}</strong></td><td><div class="table-actions"><button class="tiny-btn" data-action="view-student" data-id="${s.id}">View</button><button class="tiny-btn" data-action="edit-student" data-id="${s.id}">Edit</button><button class="tiny-btn danger" data-action="delete-student" data-id="${s.id}">Delete</button></div></td></tr>`).join('');
     const addButton = activeUser.role === 'admin' ? '<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button>' : '';
-    return `${pageHeading('Student directory', 'Find, review and maintain academic information for your students.', addButton)}
+    return `${pageHeading('Student directory', 'Find, review, update or remove student academic information.', addButton)}
       <div class="toolbar"><input class="search-box" id="studentSearch" placeholder="Search by name, ID, course or email…" /><select class="filter-select" id="departmentFilter"><option value="">All departments</option>${[...new Set(db.students.map(s=>s.profile.department))].sort().map(d=>`<option>${escapeHTML(d)}</option>`).join('')}</select></div>
       <section class="panel" style="padding:0"><div class="panel-heading" style="padding:17px 17px 0"><h3>All students</h3><span class="pill">${db.students.length} records</span></div><div class="table-wrap" style="border:0;border-radius:0 0 13px 13px"><table class="data-table" id="studentsTable"><thead><tr><th>Student</th><th>Student ID</th><th>Course</th><th>Department</th><th>Year</th><th>Attendance</th><th>CGPA</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }
+
+  function deleteStudent(id) {
+    if (!['admin','faculty'].includes(activeUser?.role)) return toast('Only faculty or an administrator can delete students.', 'error');
+    const student = getStudent(id);
+    if (!student) return toast('Student record was not found.', 'error');
+    if (!window.confirm(`Delete ${student.profile.name}'s student account and record? This also removes their correction requests and activity sign-ups.`)) return;
+    const name = student.profile.name;
+    db.students = db.students.filter(item => item.id !== id);
+    db.users = db.users.filter(user => !(user.role === 'student' && user.studentId === id));
+    db.requests = db.requests.filter(request => request.studentId !== id);
+    db.events.forEach(event => { event.signups = (event.signups || []).filter(entry => entry.studentId !== id); });
+    if (focusedStudentId === id) { focusedStudentId = null; if (currentView === 'my-records') currentView = 'students'; }
+    logAction('STUDENT DELETED', `Deleted student account and profile for ${name}; linked correction requests and activity sign-ups were removed.`, id);
+    if (saveDatabase()) { renderNav(); renderView(); toast(`Student ${name} was deleted.`); }
   }
 
   function logRow(log) {
@@ -578,9 +601,9 @@
   }
 
   function login(email, password) {
-    const user = db.users.find(u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password && u.role === selectedRole);
+    const user = db.users.find(u => u.email.toLowerCase() === email.trim().toLowerCase() && u.password === password);
     if (!user) {
-      $('#loginMessage').textContent = 'Those details do not match the selected role. Please check your email and password.';
+      $('#loginMessage').textContent = 'Those email and password details do not match an account. Please check and try again.';
       return;
     }
     activeUser = { ...user };
@@ -592,12 +615,16 @@
     $('#topUserRole').textContent = user.role === 'admin' ? 'Admin' : user.role === 'faculty' ? 'Faculty' : 'Student';
     $('#userAvatar').textContent = initials(user.name);
     $('#exportButton').classList.toggle('hidden', !['admin','faculty'].includes(user.role));
-    logAction('LOGIN', `${user.role === 'faculty' ? 'Faculty' : 'Student'} signed in.`, user.studentId || '');
+    logAction('LOGIN', `${user.role === 'admin' ? 'Admin' : user.role === 'faculty' ? 'Faculty' : 'Student'} signed in.`, user.studentId || '');
     saveDatabase();
     renderNav(); renderView();
   }
 
   function logout() {
+    if (activeUser && ['faculty','admin'].includes(activeUser.role)) {
+      const approved = window.confirm('Are you sure you want to log out of Ace Records?');
+      if (!approved) return;
+    }
     if (activeUser) {
       logAction('LOGOUT', `${activeUser.role} signed out.`, activeUser.studentId || '');
       saveDatabase();
@@ -935,6 +962,7 @@
       case 'reject-request': reviewRequest(id, false); break;
       case 'add-student': openAddStudentModal(); break;
       case 'edit-student': openEditStudentModal(id); break;
+      case 'delete-student': deleteStudent(id); break;
       case 'view-student': viewStudent(id); break;
       case 'view-corrections': correctionFilterStudentId = id; switchView('approvals'); break;
       case 'clear-correction-filter': correctionFilterStudentId = ''; switchView('approvals'); break;
@@ -950,30 +978,10 @@
 
   function initialise() {
     db = loadDatabase();
-    $$('.role-option').forEach(button => button.addEventListener('click', () => {
-      selectedRole = button.dataset.role;
-      $$('.role-option').forEach(item => item.classList.toggle('active', item === button));
-      $('#loginEmail').placeholder = selectedRole === 'student' ? 'you@college.edu' : 'faculty@college.edu';
-      $('#loginMessage').textContent = '';
-    }));
     $('#loginForm').addEventListener('submit', event => { event.preventDefault(); login($('#loginEmail').value, $('#loginPassword').value); });
     $('#togglePassword').addEventListener('click', () => {
       const input = $('#loginPassword'); input.type = input.type === 'password' ? 'text' : 'password';
     });
-    $$('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
-      const role = ['student','faculty','admin'].includes(button.dataset.fillDemo) ? button.dataset.fillDemo : 'student';
-      selectedRole = role;
-      $$('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
-      const credentials = role === 'admin'
-        ? { email: 'admin@ace.demo', password: 'AceAdmin@2026' }
-        : role === 'faculty'
-          ? { email: 'faculty@ace.demo', password: 'manish@itmuni' }
-          : { email: 'ayush@student.demo', password: 'student123' };
-      $('#loginEmail').value = credentials.email;
-      $('#loginPassword').value = credentials.password;
-      $('#loginMessage').textContent = '';
-      login(credentials.email, credentials.password);
-    }));
     $('#logoutButton').addEventListener('click', logout);
     $('#exportButton').addEventListener('click', exportExcel);
     $('#sideNav').addEventListener('click', handleClicks);
