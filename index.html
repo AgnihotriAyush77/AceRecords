@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ffd84a" />
+  <meta name="description" content="Ace Records — a cheerful student record management demo by Ayush Agnihotri." />
+  <title>Ace Records | Student Record Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <div class="page-doodles" aria-hidden="true">
+    <span class="doodle star star-one">✦</span><span class="doodle star star-two">✦</span>
+    <span class="doodle circle circle-one"></span><span class="doodle circle circle-two"></span>
+    <span class="doodle squiggle">〰</span>
+  </div>
+
+  <main id="authScreen" class="auth-screen">
+    <section class="auth-card">
+      <div class="auth-visual">
+        <div class="brand brand-light"><span class="brand-mark">A<span>+</span></span><span>ace records</span></div>
+        <div class="visual-copy">
+          <span class="eyebrow">YOUR COLLEGE LIFE, ORGANIZED</span>
+          <h1>Big goals.<br /><span>Bright records.</span></h1>
+          <p>One happy place for marks, attendance, activities and achievements.</p>
+        </div>
+        <div class="hero-illustration" aria-hidden="true">
+          <div class="sun-face">☀</div>
+          <div class="book book-back"></div><div class="book book-front"><span>ACE!</span><i>✦</i></div>
+          <div class="pencil">✎</div><div class="tiny-star">✦</div>
+        </div>
+        <div class="visual-footer"><span>✦</span> Made for curious minds</div>
+      </div>
+
+      <div class="auth-form-area">
+        <div class="auth-topline"><span class="mini-pill">✦ DEMO WORKSPACE</span><span class="auth-note">A little progress every day!</span></div>
+        <div class="auth-heading"><h2>Welcome back!</h2><p>Log in to your Ace Records space.</p></div>
+        <div class="role-switch" role="group" aria-label="Choose login role">
+          <button class="role-option active" type="button" data-role="student">🎒 Student</button>
+          <button class="role-option" type="button" data-role="faculty">🧑‍🏫 Faculty</button>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label for="loginEmail">Email address</label>
+          <div class="input-wrap"><span>✉</span><input id="loginEmail" type="email" autocomplete="username" placeholder="you@college.edu" required /></div>
+          <label for="loginPassword">Password</label>
+          <div class="input-wrap"><span>🔒</span><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Enter your password" required /><button id="togglePassword" type="button" class="password-toggle" aria-label="Show password">◉</button></div>
+          <div id="loginMessage" class="form-message" role="alert"></div>
+          <button class="btn btn-primary login-submit" type="submit">Let's go! <span>→</span></button>
+        </form>
+        <div class="demo-credentials" id="demoCredentials">
+          <div class="demo-heading"><span>✨</span> Student demo account</div>
+          <div class="credential-line"><span>Student</span><button type="button" data-fill-demo="student">Use demo login ↗</button></div>
+          <div class="credential-line"><span>Faculty login</span><strong>faculty@ace.demo</strong></div>
+          <div class="credential-line"><span>Faculty password</span><strong>manish@itmuni</strong></div>
+          <p>Demo data stays in this browser on this device.</p>
+        </div>
+        <a class="college-cta login-college-cta" href="mailto:AgnihotriAyush77@gmail.com?subject=Interested%20in%20Ace%20Records%20for%20my%20College&body=Hello%20Ayush%2C%0A%0AI%20am%20interested%20in%20Ace%20Records%20services%20to%20manage%20my%20college%20records.%0A%0AName%3A%20%0APosition%3A%20%0AMobile%20No.%3A%20%0A%0APlease%20share%20more%20details.%0A%0AThank%20you." target="_blank" rel="noopener noreferrer">Try Ace Records for your College <span>↗</span></a>
+        <div class="auth-bottom">A cheerful student records companion <span>♥</span></div>
+      </div>
+    </section>
+    <p class="auth-credit">Ace Records · Designed by <strong>Ayush Agnihotri</strong></p>
+  </main>
+
+  <div id="appScreen" class="app-screen hidden">
+    <header class="topbar">
+      <a href="#dashboard" class="brand brand-dark" id="homeBrand"><span class="brand-mark">A<span>+</span></span><span>ace records</span></a>
+      <div class="topbar-right">
+        <span class="demo-status"><i></i> DEMO DATABASE</span>
+        <button id="exportButton" class="btn btn-outline export-top">⇩ <span>Export Excel</span></button>
+        <div class="user-chip"><span class="avatar" id="userAvatar">A</span><span class="user-chip-text"><strong id="topUserName">Student</strong><small id="topUserRole">Student</small></span></div>
+        <button id="logoutButton" class="icon-button" title="Log out" aria-label="Log out">↪</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-label">WORKSPACE</div>
+        <nav id="sideNav" class="side-nav" aria-label="Main navigation"></nav>
+        <div class="sidebar-bottom">
+          <div class="help-sticker"><span>💡</span><div><strong>Little reminder</strong><p>Keep your records up to date!</p></div></div>
+
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <div class="content-inner" id="viewRoot" tabindex="-1"></div>
+      </main>
+    </div>
+
+    <footer class="site-footer"><span>© 2026 <a href="https://www.linkedin.com/in/agnihotriayush77/" target="_blank" rel="noopener noreferrer">Ayush Agnihotri</a></span><span>Made with <b>♥</b> for every learner</span></footer>
+  </div>
+
+  <div id="modalRoot" class="modal-root" aria-live="polite"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
