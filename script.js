@@ -951,7 +951,177 @@
     renderNav(); renderView();
   }
 
-  function exportExcel() {
+  function academicAnalysisSheet(students) {
+    const endRow = Math.max(2, students.length + 1);
+    const avg = values => values.length ? values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length : 0;
+    const attendance = students.map(student => Number(averageAttendance(student) || 0));
+    const cgpas = students.map(student => Number(cgpa(student) || 0));
+    const class12 = students.map(student => Number(student.academics?.class12?.percentage || 0));
+    const fees = students.map(student => student.profile.feeStatus || 'Unknown');
+    const paidFees = students.map(student => Number(student.profile.feePaid || 0));
+    const categories = ['Paid', 'Pending', 'Partly paid', 'Scholarship'];
+    const feeCounts = categories.map(category => fees.filter(status => status === category).length);
+    const formulaRows = [
+      ['ACE RECORDS | ACADEMIC ANALYSIS', ''],
+      ['Formula-driven overview of student performance, attendance and fee collection', ''],
+      ['', ''],
+      ['Metric', 'Calculated result'],
+      ['Total students', ''],
+      ['Average attendance (%)', ''],
+      ['Average CGPA', ''],
+      ['Pending fee accounts', ''],
+      ['Total fees received (₹)', ''],
+      ['Students with attendance ≥ 75%', ''],
+      ['Average Class XII marks (%)', ''],
+      ['Paid fee accounts', ''],
+      ['Partly paid fee accounts', ''],
+      ['Scholarship accounts', ''],
+      ['', ''],
+      ['Fee status', 'Student count'],
+      ['Paid', ''],
+      ['Pending', ''],
+      ['Partly paid', ''],
+      ['Scholarship', ''],
+      ['', ''],
+      ['Formula notes', 'These cells contain Excel formulas and recalculate when the workbook opens.'],
+      ['Attendance chart', 'Student-wise attendance percentage from the Students worksheet.'],
+      ['Fee chart', 'Distribution of student accounts by fee status.']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(formulaRows);
+    const formulaCell = (address, formula, value, numberFormat) => {
+      ws[address] = { t: 'n', f: formula, v: Number(value || 0) };
+      if (numberFormat) ws[address].z = numberFormat;
+    };
+    formulaCell('B5', 'COUNTA(Students!$A$2:$A$' + endRow + ')', students.length, '0');
+    formulaCell('B6', 'IFERROR(AVERAGE(Students!$R$2:$R$' + endRow + '),0)', avg(attendance), '0.0');
+    formulaCell('B7', 'IFERROR(AVERAGE(Students!$Q$2:$Q$' + endRow + '),0)', avg(cgpas), '0.00');
+    formulaCell('B8', 'COUNTIF(Students!$T$2:$T$' + endRow + ',"Pending")', feeCounts[1], '0');
+    formulaCell('B9', 'SUM(Students!$U$2:$U$' + endRow + ')', paidFees.reduce((sum, value) => sum + value, 0), '₹#,##0.00');
+    formulaCell('B10', 'COUNTIF(Students!$R$2:$R$' + endRow + ',">=75")', attendance.filter(value => value >= 75).length, '0');
+    formulaCell('B11', 'IFERROR(AVERAGE(Students!$P$2:$P$' + endRow + '),0)', avg(class12), '0.0');
+    formulaCell('B12', 'COUNTIF(Students!$T$2:$T$' + endRow + ',"Paid")', feeCounts[0], '0');
+    formulaCell('B13', 'COUNTIF(Students!$T$2:$T$' + endRow + ',"Partly paid")', feeCounts[2], '0');
+    formulaCell('B14', 'COUNTIF(Students!$T$2:$T$' + endRow + ',"Scholarship")', feeCounts[3], '0');
+    categories.forEach((category, index) => {
+      formulaCell('B' + (17 + index), 'COUNTIF(Students!$T$2:$T$' + endRow + ',A' + (17 + index) + ')', feeCounts[index], '0');
+    });
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }
+    ];
+    ws['!cols'] = [{ wch: 38 }, { wch: 60 }];
+    ws['!rows'] = [{ hpt: 28 }, { hpt: 24 }];
+    return ws;
+  }
+
+  function xmlEscape(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  function makeExcelChartTitle(text) {
+    return '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr lang="en-US"/></a:pPr><a:r><a:rPr lang="en-US" sz="1500" b="1"/><a:t>' + xmlEscape(text) + '</a:t></a:r><a:endParaRPr lang="en-US"/></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>';
+  }
+
+  function makeStringCache(values) {
+    return '<c:strCache><c:ptCount val="' + values.length + '"/>' + values.map((value, index) => '<c:pt idx="' + index + '"><c:v>' + xmlEscape(value) + '</c:v></c:pt>').join('') + '</c:strCache>';
+  }
+
+  function makeNumberCache(values) {
+    return '<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="' + values.length + '"/>' + values.map((value, index) => '<c:pt idx="' + index + '"><c:v>' + Number(value || 0) + '</c:v></c:pt>').join('') + '</c:numCache>';
+  }
+
+  function makeAttendanceChartXml(students) {
+    const names = students.map(student => student.profile.name || student.id);
+    const values = students.map(student => Number(averageAttendance(student) || 0));
+    const endRow = Math.max(2, students.length + 1);
+    const categoriesFormula = "'Students'!$B$2:$B$" + endRow;
+    const valuesFormula = "'Students'!$R$2:$R$" + endRow;
+    const catAxis = 48650112, valAxis = 48672768;
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+'<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+'<c:lang val="en-US"/><c:chart>' + makeExcelChartTitle('Student Attendance by Student') +
+'<c:plotArea><c:layout/><c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>' +
+'<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>\'Students\'!$R$1</c:f>' + makeStringCache(['Attendance %']) + '</c:strRef></c:tx>' +
+'<c:cat><c:strRef><c:f>' + categoriesFormula + '</c:f>' + makeStringCache(names) + '</c:strRef></c:cat>' +
+'<c:val><c:numRef><c:f>' + valuesFormula + '</c:f>' + makeNumberCache(values) + '</c:numRef></c:val>' +
+'</c:ser><c:gapWidth val="55"/><c:overlap val="0"/><c:axId val="' + catAxis + '"/><c:axId val="' + valAxis + '"/></c:barChart>' +
+'<c:catAx><c:axId val="' + catAxis + '"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + valAxis + '"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>' +
+'<c:valAx><c:axId val="' + valAxis + '"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/><c:max val="100"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + catAxis + '"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>' +
+'</c:plotArea><c:legend><c:legendPos val="b"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+  }
+
+  function makeFeeStatusChartXml(students) {
+    const categories = ['Paid', 'Pending', 'Partly paid', 'Scholarship'];
+    const values = categories.map(category => students.filter(student => (student.profile.feeStatus || 'Unknown') === category).length);
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+'<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+'<c:lang val="en-US"/><c:chart>' + makeExcelChartTitle('Student Fee Status Distribution') +
+'<c:plotArea><c:layout/><c:pieChart><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>' +
+'<c:tx><c:v>Student count</c:v></c:tx>' +
+'<c:cat><c:strRef><c:f>\'Academic Analysis\'!$A$17:$A$20</c:f>' + makeStringCache(categories) + '</c:strRef></c:cat>' +
+'<c:val><c:numRef><c:f>\'Academic Analysis\'!$B$17:$B$20</c:f>' + makeNumberCache(values) + '</c:numRef></c:val>' +
+'</c:ser><c:dLbls><c:showLegendKey val="0"/><c:showVal val="1"/><c:showPercent val="1"/><c:showCategoryName val="1"/></c:dLbls></c:pieChart></c:plotArea>' +
+'<c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+  }
+
+  function chartDrawingXml() {
+    const anchor = (id, name, rid, fromCol, toCol) => '<xdr:twoCellAnchor editAs="oneCell">' +
+'<xdr:from><xdr:col>' + fromCol + '</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+'<xdr:to><xdr:col>' + toCol + '</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>19</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>' +
+'<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="' + id + '" name="' + xmlEscape(name) + '"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
+'<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>' +
+'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + rid + '"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+'<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+anchor(2, 'Attendance by Student', 'rId1', 3, 11) +
+anchor(3, 'Fee Status Distribution', 'rId2', 12, 20) +
+'</xdr:wsDr>';
+  }
+
+  function addContentTypeOverride(xml, partName, contentType) {
+    if (xml.includes('PartName="' + partName + '"')) return xml;
+    return xml.replace('</Types>', '<Override PartName="' + partName + '" ContentType="' + contentType + '"/></Types>');
+  }
+
+  async function attachAcademicCharts(xlsxBytes, students) {
+    if (!window.JSZip?.loadAsync) throw new Error('The Excel chart package helper did not load. Please refresh the page and try exporting again.');
+    const zip = await JSZip.loadAsync(xlsxBytes);
+    const workbookXml = await zip.file('xl/workbook.xml').async('string');
+    const workbookRels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+    const sheetTag = (workbookXml.match(/<sheet\b[^>]*name="Academic Analysis"[^>]*\/>/) || [])[0];
+    if (!sheetTag) throw new Error('Academic Analysis worksheet was not found in the exported workbook.');
+    const sheetRid = (sheetTag.match(/\br:id="([^"]+)"/) || [])[1];
+    if (!sheetRid) throw new Error('Academic Analysis worksheet relationship is missing.');
+    const sheetRelTag = (workbookRels.match(/<Relationship\b[^>]*\/>/g) || []).find(tag => tag.includes('Id="' + sheetRid + '"'));
+    const sheetTarget = sheetRelTag && (sheetRelTag.match(/\bTarget="([^"]+)"/) || [])[1];
+    if (!sheetTarget) throw new Error('Could not locate the Academic Analysis worksheet file.');
+    const sheetPath = sheetTarget.startsWith('/') ? sheetTarget.slice(1) : sheetTarget.startsWith('xl/') ? sheetTarget : 'xl/' + sheetTarget;
+    const sheetXml = await zip.file(sheetPath).async('string');
+    const sheetRelsPath = sheetPath.replace(/([^/]+\.xml)$/, '_rels/$1.rels');
+    let contentTypes = await zip.file('[Content_Types].xml').async('string');
+    let worksheetXml = sheetXml;
+    if (!/xmlns:r=/.test(worksheetXml.slice(0, worksheetXml.indexOf('>')))) {
+      worksheetXml = worksheetXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+    }
+    if (!worksheetXml.includes('<drawing ')) worksheetXml = worksheetXml.replace('</worksheet>', '<drawing r:id="rIdAceCharts"/></worksheet>');
+    zip.file(sheetPath, worksheetXml);
+    zip.file(sheetRelsPath, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdAceCharts" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+    zip.file('xl/drawings/drawing1.xml', chartDrawingXml());
+    zip.file('xl/drawings/_rels/drawing1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart2.xml"/></Relationships>');
+    zip.file('xl/charts/chart1.xml', makeAttendanceChartXml(students));
+    zip.file('xl/charts/chart2.xml', makeFeeStatusChartXml(students));
+    contentTypes = addContentTypeOverride(contentTypes, '/xl/drawings/drawing1.xml', 'application/vnd.openxmlformats-officedocument.drawing+xml');
+    contentTypes = addContentTypeOverride(contentTypes, '/xl/charts/chart1.xml', 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml');
+    contentTypes = addContentTypeOverride(contentTypes, '/xl/charts/chart2.xml', 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml');
+    zip.file('[Content_Types].xml', contentTypes);
+    const updatedWorkbookXml = workbookXml.includes('<calcPr ')
+      ? workbookXml.replace(/<calcPr\b[^>]*\/>/, '<calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>')
+      : workbookXml.replace('</workbook>', '<calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>');
+    zip.file('xl/workbook.xml', updatedWorkbookXml);
+    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', compression: 'DEFLATE' });
+  }
+
+  async function exportExcel() {
     if (!['admin','faculty'].includes(activeUser?.role)) return toast('Excel export is available to staff accounts only.', 'error');
     const students = db.students;
     const studentRows = students.map(s => ({
@@ -959,7 +1129,7 @@
       'Course': s.profile.course, 'Department': s.profile.department, 'Year': s.profile.currentYear, 'Section': s.profile.section,
       'Class X Board': s.academics.class10.board, 'Class X Marks': s.academics.class10.marks, 'Class X %': s.academics.class10.percentage,
       'Class XII Board': s.academics.class12.board, 'Class XII Stream': s.academics.class12.stream, 'Class XII Marks': s.academics.class12.marks, 'Class XII %': s.academics.class12.percentage,
-      'CGPA (calculated)': Number(cgpa(s) || 0), 'Attendance %': averageAttendance(s), 'Activities': s.activities.length, 'Fee Status': s.profile.feeStatus
+      'CGPA (calculated)': Number(cgpa(s) || 0), 'Attendance %': averageAttendance(s), 'Activities': s.activities.length, 'Fee Status': s.profile.feeStatus, 'Fee Paid (₹)': Number(s.profile.feePaid || 0)
     }));
     const academicRows = students.flatMap(s => s.academics.semesters.map(sem => ({ 'Student ID': s.id, 'Student Name': s.profile.name, 'Semester': sem.label, 'SGPA': sem.sgpa, 'Credits': sem.credits, 'Attendance %': sem.attendance, 'Backlogs': sem.backlogs })));
     const activityRows = [
@@ -974,23 +1144,44 @@
     ];
     const requestRows = db.requests.map(r => ({ 'Request ID':r.id, 'Student ID':r.studentId, 'Section':r.section, 'Field':r.field, 'Proposed Value':r.newValue, 'Reason':r.reason, 'Status':r.status, 'Submitted':r.createdAt, 'Reviewed By':r.reviewedBy || '', 'Reviewed At':r.reviewedAt || '', 'Evidence File':r.evidence?.name || '' }));
     const logRows = db.logs.map(l => ({ 'Timestamp':l.timestamp, 'Actor':l.actor, 'Role':l.role, 'Action':l.action, 'Student ID':l.studentId, 'Details':l.details }));
-    if (window.XLSX?.utils) {
-      const wb = XLSX.utils.book_new();
-      const addSheet = (name, rows) => {
-        const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No records available yet.' }]);
-        ws['!cols'] = Object.keys(rows[0] || {Note:''}).map(key => ({ wch: Math.min(30, Math.max(14, key.length + 2)) }));
-        XLSX.utils.book_append_sheet(wb, ws, name);
-      };
-      addSheet('Students', studentRows); addSheet('Academics', academicRows); addSheet('Activities', activityRows); addSheet('Correction Requests', requestRows); addSheet('Audit Trail', logRows);
-      const summary = [{ Metric:'Total students', Value:students.length },{ Metric:'Pending correction requests', Value:getPendingCount() },{ Metric:'Average attendance %', Value: students.length ? Math.round(students.reduce((sum,s)=>sum+averageAttendance(s),0)/students.length) : 0 },{ Metric:'Exported at', Value:new Date().toLocaleString('en-IN') }];
-      addSheet('Summary', summary);
-      XLSX.writeFile(wb, `Ace_Records_${localDateString()}.xlsx`);
-      toast('Excel workbook downloaded with six worksheets.');
+    if (window.XLSX?.utils && window.JSZip?.loadAsync) {
+      try {
+        const wb = XLSX.utils.book_new();
+        const addSheet = (name, rows) => {
+          const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No records available yet.' }]);
+          ws['!cols'] = Object.keys(rows[0] || {Note:''}).map(key => ({ wch: Math.min(34, Math.max(14, key.length + 2)) }));
+          XLSX.utils.book_append_sheet(wb, ws, name);
+        };
+        addSheet('Students', studentRows);
+        addSheet('Academics', academicRows);
+        addSheet('Activities', activityRows);
+        addSheet('Correction Requests', requestRows);
+        addSheet('Audit Trail', logRows);
+        addSheet('Summary', [
+          { Metric:'Total students', Value:students.length },
+          { Metric:'Pending correction requests', Value:getPendingCount() },
+          { Metric:'Average attendance %', Value: students.length ? Math.round(students.reduce((sum,s)=>sum+averageAttendance(s),0)/students.length) : 0 },
+          { Metric:'Exported at', Value:new Date().toLocaleString('en-IN') }
+        ]);
+        const analysisSheet = academicAnalysisSheet(students);
+        XLSX.utils.book_append_sheet(wb, analysisSheet, 'Academic Analysis');
+        const xlsxBytes = XLSX.write(wb, { bookType:'xlsx', type:'array', compression:true });
+        const workbookBlob = await attachAcademicCharts(xlsxBytes, students);
+        const url = URL.createObjectURL(workbookBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Ace_Records_${localDateString()}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        toast('Excel workbook downloaded with seven worksheets, formulas and two charts.');
+      } catch (error) {
+        console.error('Ace Records Excel export failed:', error);
+        toast('Excel export could not add formulas and charts. Please refresh the page and try again.', 'error');
+      }
     } else {
-      const csv = [Object.keys(studentRows[0] || {}).join(','), ...studentRows.map(row => Object.values(row).map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(','))].join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'Ace_Records_Students.csv'; link.click(); URL.revokeObjectURL(url);
-      toast('Excel library unavailable. Downloaded an Excel-compatible CSV instead.');
+      toast('Excel export needs the XLSX and chart helper libraries. Refresh the page and try again.', 'error');
     }
   }
 
