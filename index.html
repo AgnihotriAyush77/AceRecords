@@ -1450,6 +1450,8 @@ a { color: inherit; }
     if (window.XLSX?.utils && window.JSZip?.loadAsync) {
       try {
         const wb = XLSX.utils.book_new();
+        const analysisSheet = academicAnalysisSheet(students);
+        XLSX.utils.book_append_sheet(wb, analysisSheet, 'Academic Analysis');
         const addSheet = (name, rows) => {
           const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Note: 'No records available yet.' }]);
           ws['!cols'] = Object.keys(rows[0] || {Note:''}).map(key => ({ wch: Math.min(34, Math.max(14, key.length + 2)) }));
@@ -1466,8 +1468,6 @@ a { color: inherit; }
           { Metric:'Average attendance %', Value: students.length ? Math.round(students.reduce((sum,s)=>sum+averageAttendance(s),0)/students.length) : 0 },
           { Metric:'Exported at', Value:new Date().toLocaleString('en-IN') }
         ]);
-        const analysisSheet = academicAnalysisSheet(students);
-        XLSX.utils.book_append_sheet(wb, analysisSheet, 'Academic Analysis');
         const xlsxBytes = XLSX.write(wb, { bookType:'xlsx', type:'array', compression:true });
         const workbookBlob = await attachAcademicCharts(xlsxBytes, students);
         const url = URL.createObjectURL(workbookBlob);
