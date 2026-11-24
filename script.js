@@ -93,6 +93,17 @@
       student.academics = student.academics || {};
       student.academics.semesters = Array.from({ length: 8 }, (_, index) => student.academics.semesters?.[index] || ({ label: `Semester ${index + 1}`, sgpa: '', credits: '', attendance: '', backlogs: 0 }));
     });
+    // Always restore the built-in demo accounts if an older browser database is missing them.
+    const demoDefaults = seedDatabase();
+    demoDefaults.students.forEach(student => {
+      if (!parsed.students.some(existing => existing.id === student.id)) parsed.students.push(student);
+    });
+    demoDefaults.users.forEach(user => {
+      if (!parsed.users.some(existing =>
+        String(existing.email || '').toLowerCase() === user.email.toLowerCase() &&
+        existing.role === user.role
+      )) parsed.users.push(user);
+    });
     parsed.version = 2;
     return parsed;
   }
@@ -797,12 +808,17 @@
     $('#togglePassword').addEventListener('click', () => {
       const input = $('#loginPassword'); input.type = input.type === 'password' ? 'text' : 'password';
     });
-    $$('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
-      const role = button.dataset.fillDemo; selectedRole = role;
-      $$('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
-      $('#loginEmail').value = 'ayush@student.demo';
-      $('#loginPassword').value = 'student123';
+    $('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
+      const role = button.dataset.fillDemo === 'faculty' ? 'faculty' : 'student';
+      selectedRole = role;
+      $('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
+      const credentials = role === 'faculty'
+        ? { email: 'faculty@ace.demo', password: 'manish@itmuni' }
+        : { email: 'ayush@student.demo', password: 'student123' };
+      $('#loginEmail').value = credentials.email;
+      $('#loginPassword').value = credentials.password;
       $('#loginMessage').textContent = '';
+      login(credentials.email, credentials.password);
     }));
     $('#logoutButton').addEventListener('click', logout);
     $('#exportButton').addEventListener('click', exportExcel);
@@ -821,5 +837,18 @@
     $('#homeBrand').addEventListener('click', event => { if (activeUser) { event.preventDefault(); switchView('dashboard'); } });
   }
 
-  document.addEventListener('DOMContentLoaded', initialise);
+  function startAceRecords() {
+    try {
+      initialise();
+    } catch (error) {
+      console.error('Ace Records startup failed:', error);
+      const message = document.querySelector('#loginMessage');
+      if (message) message.textContent = 'The workspace could not start correctly. Please refresh the page and try again.';
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startAceRecords, { once: true });
+  } else {
+    startAceRecords();
+  }
 })();
