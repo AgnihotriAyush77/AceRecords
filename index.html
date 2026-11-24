@@ -374,6 +374,12 @@ a { color: inherit; }
     root.append(node);
     setTimeout(() => node.remove(), 3300);
   }
+  function localDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
   function formatDate(date) {
     if (!date) return '—';
     const parsed = new Date(date);
@@ -435,7 +441,7 @@ a { color: inherit; }
       const requests = db.requests.filter(r => r.status === 'Pending').slice(0,4);
       return `${pageHeading(isAdmin ? 'Admin overview' : 'Faculty overview', isAdmin ? 'Manage students, faculty accounts, activities and approvals.' : 'A clear snapshot of your students, their progress and updates.')}
         <div class="welcome-banner"><div><h2>Hello, ${escapeHTML(activeUser.name)}! 👋</h2><p>${isAdmin ? "Your administrator workspace is ready. Manage university records, accounts and activities." : "Your faculty workspace is ready. Review requests and keep student records moving forward."}</p></div><div class="welcome-emoji">${isAdmin ? "🛡️" : "🧑‍🏫"}</div></div>
-        <div class="stats-grid">${statCard('Total students', total, '🎒', 'Across demo departments')}${statCard('Pending approvals', getPendingCount(), '📝', 'Waiting for your review')}${statCard('Average attendance', `${avgAttend}%`, '📅', 'Across all demo records')}${statCard('Average CGPA', avgCgpa, '⭐', 'Based on available semesters')}</div>
+        <div class="stats-grid">${statCard('Total students', total, '🎒', 'Across all departments')}${statCard('Pending approvals', getPendingCount(), '📝', 'Waiting for your review')}${statCard('Average attendance', `${avgAttend}%`, '📅', 'Across current student records')}${statCard('Average CGPA', avgCgpa, '⭐', 'Based on available semesters')}</div>
         <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h3>Needs your attention</h3><button class="text-action" data-view="approvals">Open inbox →</button></div>${requests.length ? requests.map(requestCard).join('') : `<div class="empty-state"><b>All caught up! 🎉</b>No pending corrections right now.</div>`}</section>
         <section class="panel"><div class="panel-heading"><h3>${isAdmin ? 'Recent activity' : 'Faculty workspace'}</h3>${isAdmin ? '<button class="text-action" data-view="audit">View audit trail →</button>' : '<span class="pill">Faculty</span>'}</div>${isAdmin ? `<div class="log-list">${latest.map(logRow).join('')}</div>` : '<div class="empty-state">Use the student directory to view and update student records. Review pending corrections in the approval inbox. Your faculty account details are under My account.</div>'}</section></div>
         <div class="quick-actions">
@@ -449,7 +455,7 @@ a { color: inherit; }
     const student = getCurrentStudent();
     if (!student) return `<div class="empty-state"><b>Student record not found</b>Sign out and use a demo login.</div>`;
     const pending = db.requests.filter(r => r.studentId === student.id && r.status === 'Pending').length;
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateString();
     const registeredEvents = db.events.filter(event => (event.signups || []).some(entry => entry.studentId === student.id)).sort((a,b) => String(a.date).localeCompare(String(b.date)));
     const upcomingRegisteredEvents = registeredEvents.filter(event => !event.date || event.date >= today).slice(0,4);
     const sems = activeSemesters(student);
@@ -491,7 +497,7 @@ a { color: inherit; }
     const signups = Array.isArray(event.signups) ? event.signups : [];
     const studentId = activeUser?.studentId;
     const registered = studentId ? signups.some(entry => entry.studentId === studentId) : false;
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateString();
     const deadline = event.signupDeadline || event.date;
     const registrationClosed = today > deadline || today > event.date;
     return `<article class="request-card"><div>
@@ -508,7 +514,7 @@ a { color: inherit; }
 
   function renderActivities() {
     const events = (db.events || []).slice().sort((a,b) => `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`));
-    const today = new Date().toISOString().slice(0,10);
+    const today = localDateString();
     const upcoming = events.filter(event => !event.date || event.date >= today);
     if (activeUser.role === 'admin' || activeUser.role === 'faculty') {
       const isAdmin = activeUser.role === 'admin';
@@ -666,7 +672,7 @@ a { color: inherit; }
       event.signups = event.signups.filter(entry => entry.studentId !== studentId);
       logAction('ACTIVITY SIGN-UP CANCELLED', `Cancelled registration for ${event.title}.`, studentId, { eventId: event.id });
     } else {
-      const today = new Date().toISOString().slice(0,10);
+      const today = localDateString();
       const deadline = event.signupDeadline || event.date;
       if (today > deadline || today > event.date) return toast('Registration for this activity has closed.', 'error');
       if (registered) return toast('You are already signed up for this activity.', 'error');
@@ -843,7 +849,7 @@ a { color: inherit; }
     if (!student) throw new Error('The student record no longer exists.');
     const oldValue = request.section === 'Activity' ? '—' : getRequestCurrentValue(student, request.section, request.field);
     if (request.section === 'Activity') {
-      student.activities.unshift({ id: `ACT-${Date.now()}`, title: request.newValue, type: 'Student activity', date: new Date().toISOString().slice(0,10), description: request.reason });
+      throw new Error('Student activities are no longer submitted as corrections. Use the Activities page to sign up for published events.');
     } else if (request.section === 'Profile') {
       const allowed = ['phone','email','address','guardian','department','course','currentYear'];
       if (!allowed.includes(request.field)) throw new Error('This profile field is not editable through a student request.');
@@ -876,6 +882,7 @@ a { color: inherit; }
   }
 
   function reviewRequest(id, approve) {
+    if (!['admin','faculty'].includes(activeUser?.role)) return toast('Only staff can review correction requests.', 'error');
     const request = db.requests.find(r => r.id === id);
     if (!request || request.status !== 'Pending') return toast('This request has already been reviewed.', 'error');
     if (approve && !request.evidence?.data) return toast('This request has no supporting evidence attached.', 'error');
@@ -1052,8 +1059,14 @@ a { color: inherit; }
     }));
     const academicRows = students.flatMap(s => s.academics.semesters.map(sem => ({ 'Student ID': s.id, 'Student Name': s.profile.name, 'Semester': sem.label, 'SGPA': sem.sgpa, 'Credits': sem.credits, 'Attendance %': sem.attendance, 'Backlogs': sem.backlogs })));
     const activityRows = [
-      ...students.flatMap(s => s.activities.map(a => ({ 'Category':'Student activity', 'Student ID':s.id, 'Student Name':s.profile.name, 'Activity':a.title, 'Type':a.type, 'Date':a.date, 'Time':a.time || '', 'Venue':a.venue || '', 'Description':a.description, 'Marks':a.marks ?? '' }))),
-      ...(db.events || []).map(a => ({ 'Category':'College activity', 'Student ID':'', 'Student Name':'All students', 'Activity':a.title, 'Type':a.type, 'Date':a.date, 'Time':a.time || '', 'Venue':a.venue || '', 'Description':a.description, 'Marks':a.marks ?? '' }))
+      ...students.flatMap(s => s.activities.map(a => ({ 'Category':'Historical student activity', 'Student ID':s.id, 'Student Name':s.profile.name, 'Activity':a.title, 'Type':a.type, 'Date':a.date, 'Time':a.time || '', 'Venue':a.venue || '', 'Description':a.description, 'Marks':a.marks ?? '' }))),
+      ...(db.events || []).flatMap(event => [
+        { 'Category':'College activity', 'Student ID':'', 'Student Name':'All students', 'Activity':event.title, 'Type':event.type, 'Date':event.date, 'Time':event.time || '', 'Venue':event.venue || '', 'Description':event.description, 'Registration deadline':event.signupDeadline || event.date, 'Marks':event.marks ?? '' },
+        ...(event.signups || []).map(signup => {
+          const student = getStudent(signup.studentId);
+          return { 'Category':'Activity registration', 'Student ID':signup.studentId, 'Student Name':student?.profile.name || 'Unknown student', 'Activity':event.title, 'Type':event.type, 'Date':event.date, 'Time':event.time || '', 'Venue':event.venue || '', 'Description':event.description, 'Registration deadline':event.signupDeadline || event.date, 'Signed up at':signup.signedUpAt || '', 'Marks':event.marks ?? '' };
+        })
+      ])
     ];
     const requestRows = db.requests.map(r => ({ 'Request ID':r.id, 'Student ID':r.studentId, 'Section':r.section, 'Field':r.field, 'Proposed Value':r.newValue, 'Reason':r.reason, 'Status':r.status, 'Submitted':r.createdAt, 'Reviewed By':r.reviewedBy || '', 'Reviewed At':r.reviewedAt || '', 'Evidence File':r.evidence?.name || '' }));
     const logRows = db.logs.map(l => ({ 'Timestamp':l.timestamp, 'Actor':l.actor, 'Role':l.role, 'Action':l.action, 'Student ID':l.studentId, 'Details':l.details }));
@@ -1067,7 +1080,7 @@ a { color: inherit; }
       addSheet('Students', studentRows); addSheet('Academics', academicRows); addSheet('Activities', activityRows); addSheet('Correction Requests', requestRows); addSheet('Audit Trail', logRows);
       const summary = [{ Metric:'Total students', Value:students.length },{ Metric:'Pending correction requests', Value:getPendingCount() },{ Metric:'Average attendance %', Value: students.length ? Math.round(students.reduce((sum,s)=>sum+averageAttendance(s),0)/students.length) : 0 },{ Metric:'Exported at', Value:new Date().toLocaleString('en-IN') }];
       addSheet('Summary', summary);
-      XLSX.writeFile(wb, `Ace_Records_${new Date().toISOString().slice(0,10)}.xlsx`);
+      XLSX.writeFile(wb, `Ace_Records_${localDateString()}.xlsx`);
       toast('Excel workbook downloaded with six worksheets.');
     } else {
       const csv = [Object.keys(studentRows[0] || {}).join(','), ...studentRows.map(row => Object.values(row).map(value => `"${String(value ?? '').replace(/"/g,'""')}"`).join(','))].join('\r\n');
