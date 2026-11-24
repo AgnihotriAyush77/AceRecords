@@ -808,10 +808,10 @@
     $('#togglePassword').addEventListener('click', () => {
       const input = $('#loginPassword'); input.type = input.type === 'password' ? 'text' : 'password';
     });
-    $('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
+    $$('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
       const role = button.dataset.fillDemo === 'faculty' ? 'faculty' : 'student';
       selectedRole = role;
-      $('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
+      $$('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
       const credentials = role === 'faculty'
         ? { email: 'faculty@ace.demo', password: 'manish@itmuni' }
         : { email: 'ayush@student.demo', password: 'student123' };
