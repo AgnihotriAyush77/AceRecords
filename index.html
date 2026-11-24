@@ -434,10 +434,10 @@ a { color: inherit; }
       const latest = db.logs.slice(0,5);
       const requests = db.requests.filter(r => r.status === 'Pending').slice(0,4);
       return `${pageHeading(isAdmin ? 'Admin overview' : 'Faculty overview', isAdmin ? 'Manage students, faculty accounts, activities and approvals.' : 'A clear snapshot of your students, their progress and updates.')}
-        <div class="welcome-banner"><div><h2>Hello, ${escapeHTML(activeUser.name)}! 👋</h2><p>Your faculty workspace is ready. Review requests and keep student records moving forward.</p></div><div class="welcome-emoji">🧑‍🏫</div></div>
+        <div class="welcome-banner"><div><h2>Hello, ${escapeHTML(activeUser.name)}! 👋</h2><p>${isAdmin ? "Your administrator workspace is ready. Manage university records, accounts and activities." : "Your faculty workspace is ready. Review requests and keep student records moving forward."}</p></div><div class="welcome-emoji">${isAdmin ? "🛡️" : "🧑‍🏫"}</div></div>
         <div class="stats-grid">${statCard('Total students', total, '🎒', 'Across demo departments')}${statCard('Pending approvals', getPendingCount(), '📝', 'Waiting for your review')}${statCard('Average attendance', `${avgAttend}%`, '📅', 'Across all demo records')}${statCard('Average CGPA', avgCgpa, '⭐', 'Based on available semesters')}</div>
         <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h3>Needs your attention</h3><button class="text-action" data-view="approvals">Open inbox →</button></div>${requests.length ? requests.map(requestCard).join('') : `<div class="empty-state"><b>All caught up! 🎉</b>No pending corrections right now.</div>`}</section>
-        <section class="panel"><div class="panel-heading"><h3>Recent activity</h3><button class="text-action" data-view="audit">View all →</button></div><div class="log-list">${latest.map(logRow).join('')}</div></section></div>
+        <section class="panel"><div class="panel-heading"><h3>${isAdmin ? 'Recent activity' : 'Faculty workspace'}</h3>${isAdmin ? '<button class="text-action" data-view="audit">View audit trail →</button>' : '<span class="pill">Faculty</span>'}</div>${isAdmin ? `<div class="log-list">${latest.map(logRow).join('')}</div>` : '<div class="empty-state">Use the student directory to view and update student records. Review pending corrections in the approval inbox. Your faculty account details are under My account.</div>'}</section></div>
         <div class="quick-actions">
           <button class="btn btn-blue btn-small" data-view="students">Browse student directory</button>
           <button class="btn btn-plain btn-small" data-view="approvals">Open approval inbox</button>
@@ -449,14 +449,16 @@ a { color: inherit; }
     const student = getCurrentStudent();
     if (!student) return `<div class="empty-state"><b>Student record not found</b>Sign out and use a demo login.</div>`;
     const pending = db.requests.filter(r => r.studentId === student.id && r.status === 'Pending').length;
-    const acts = student.activities.slice().sort((a,b) => String(b.date).localeCompare(String(a.date))).slice(0,4);
+    const today = new Date().toISOString().slice(0,10);
+    const registeredEvents = db.events.filter(event => (event.signups || []).some(entry => entry.studentId === student.id)).sort((a,b) => String(a.date).localeCompare(String(b.date)));
+    const upcomingRegisteredEvents = registeredEvents.filter(event => !event.date || event.date >= today).slice(0,4);
     const sems = activeSemesters(student);
     const completion = Math.min(100, Math.round((sems.length / 8) * 100));
     return `${pageHeading('Your dashboard', 'Your college journey, all in one bright little place.')}
       <div class="welcome-banner"><div><h2>Hey, ${escapeHTML(student.profile.name.split(' ')[0])}! Keep shining ✨</h2><p>Every class, project and achievement adds to your story. Here is your progress so far.</p></div><div class="welcome-emoji">🎓</div></div>
-      <div class="stats-grid">${statCard('Attendance', `${averageAttendance(student)}%`, '📅', 'Across completed semesters')}${statCard('Current CGPA', cgpa(student), '⭐', `${sems.length} semester records available`)}${statCard('Activities', student.activities.length, '🎨', 'Clubs, events and workshops')}${statCard('Pending updates', pending, '📝', 'Waiting for faculty approval')}</div>
+      <div class="stats-grid">${statCard('Attendance', `${averageAttendance(student)}%`, '📅', 'Across completed semesters')}${statCard('Current CGPA', cgpa(student), '⭐', `${sems.length} semester records available`)}${statCard('Signed-up activities', registeredEvents.length, '🎨', 'Your activity registrations')}${statCard('Pending updates', pending, '📝', 'Waiting for faculty approval')}</div>
       <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h3>Your academic journey</h3><button class="text-action" data-view="my-records">View records →</button></div><div class="academic-progress"><div class="progress-ring" style="--progress:${completion}%"><strong>${completion}%</strong></div><div class="progress-copy"><strong>${sems.length} of 8 semesters have a record</strong><p>Keep your marks and attendance accurate. Any correction needs supporting proof and faculty approval.</p><div class="mini-progress"><span style="width:${completion}%"></span></div></div></div><div class="quick-actions"><button class="btn btn-yellow btn-small" data-action="new-correction">＋ Request a correction</button><button class="btn btn-plain btn-small" data-view="activities">View activities</button></div></section>
-      <section class="panel"><div class="panel-heading"><h3>Recent activities</h3><button class="text-action" data-view="activities">See all →</button></div><div class="activity-list">${acts.length ? acts.map(activityRow).join('') : `<div class="empty-state">No activities yet.</div>`}</div></section></div>`;
+      <section class="panel"><div class="panel-heading"><h3>Next signed-up activities</h3><button class="text-action" data-view="activities">View activities →</button></div><div class="activity-list">${upcomingRegisteredEvents.length ? upcomingRegisteredEvents.map(event => `<div class="activity-row"><span class="activity-dot">✓</span><div><strong>${escapeHTML(event.title)}</strong><small>${formatDate(event.date)} · Registration deadline ${formatDate(event.signupDeadline || event.date)}</small></div></div>`).join('') : `<div class="empty-state">You have no upcoming sign-ups. Explore the Activities tab to register.</div>`}</div></section></div>`;
   }
 
   function renderStudentRecords(student) {
@@ -515,11 +517,11 @@ a { color: inherit; }
         ${isAdmin ? `<section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Past activities (${events.length-upcoming.length})</h3></div>${events.filter(event => event.date && event.date < today).length ? events.filter(event => event.date && event.date < today).map(event => eventCard(event, true, false)).join('') : '<div class="empty-state">No past activities.</div>'}</section>` : ''}`;
     }
     const student = getCurrentStudent();
-    const registrations = upcoming.filter(event => (event.signups || []).some(entry => entry.studentId === student?.id));
+    const registrations = events.filter(event => (event.signups || []).some(entry => entry.studentId === student?.id));
     const openActivities = upcoming.filter(event => !(event.signups || []).some(entry => entry.studentId === student?.id));
     return `${pageHeading('Activities', 'Discover university activities, sign up before the deadline and keep track of what is coming up.')}
       <section class="panel"><div class="panel-heading"><h3>My signed-up activities (${registrations.length})</h3><span class="pill">Your registrations</span></div>
-        ${registrations.length ? registrations.map(event => `<div class="activity-row"><span class="activity-dot">✓</span><div><strong>${escapeHTML(event.title)}</strong><small>${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')} · Registration completed · Deadline ${formatDate(event.signupDeadline || event.date)}</small></div><span class="pill">Upcoming</span></div>`).join('') : '<div class="empty-state"><b>You have not signed up for an activity yet.</b>Choose an activity below to register.</div>'}
+        ${registrations.length ? registrations.map(event => `<div class="activity-row"><span class="activity-dot">✓</span><div><strong>${escapeHTML(event.title)}</strong><small>${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')} · Registration deadline ${formatDate(event.signupDeadline || event.date)}</small></div><span class="pill">${event.date < today ? 'Completed' : 'Upcoming'}</span></div>`).join('') : '<div class="empty-state"><b>You have not signed up for an activity yet.</b>Choose an activity below to register.</div>'}
       </section>
       <section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Activities open for sign-up (${openActivities.filter(event => today <= (event.signupDeadline || event.date)).length})</h3><span class="pill">Published by Admin</span></div>
         ${openActivities.length ? openActivities.map(event => eventCard(event, false, true)).join('') : '<div class="empty-state">No other upcoming activities are available right now.</div>'}
@@ -731,9 +733,9 @@ a { color: inherit; }
       audit: renderAudit
     };
     const allowed = activeUser.role === 'admin'
-      ? ['dashboard','students','faculty','approvals','activities','audit']
+      ? ['dashboard','students','faculty','my-records','approvals','activities','audit']
       : activeUser.role === 'faculty'
-        ? ['dashboard','students','approvals','activities','my-profile']
+        ? ['dashboard','students','my-records','approvals','activities','my-profile']
         : ['dashboard','my-records','activities','corrections'];
     if (!allowed.includes(currentView)) currentView = 'dashboard';
     root.innerHTML = (views[currentView] || renderDashboard)();
