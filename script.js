@@ -5,6 +5,7 @@
 
   const DB_KEY = 'aceRecordsDemoDB_v1';
   const MAX_EVIDENCE_BYTES = 700 * 1024;
+  const DEMO_PASSWORD = 'ayush@2525';
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   let db;
@@ -14,7 +15,16 @@
   let correctionFilterStudentId = ''; 
 
   const studentSeed = [
-    ['STU1001','Ayush Agnihotri','ayush@student.demo','B.Tech Computer Science','Computer Science',2]
+    ['STU1001','Ayush Agnihotri','ayush.agnihotri@itmud.in','B.Tech Computer Science & Engineering','Computer Science',2],
+    ['STU1002','Mack Kushwah','mack@itmud.in','BBA / BBA (Honours / Research)','Business & Management',1],
+    ['STU1003','Neotri Sharma','neotri@itmud.in','BCA / BCA (Honours / Research)','Computer Applications',3],
+    ['STU1004','Mack Pushpa','mack.pushpa@itmud.in','B.Com / B.Com (Honours / Research)','Commerce',4],
+    ['STU1005','Riya Sinha','riya.sinha@itmud.in','B.Sc Agriculture','Agriculture',1],
+    ['STU1006','Tejas Reddy','tejas.reddy@itmud.in','B.Tech Computer Science & Engineering (Artificial Intelligence & Machine Learning)','Computer Science & Intelligent Systems',3],
+    ['STU1007','Kavya Nair','kavya.nair@itmud.in','B.A. LL.B (Honours)','Law',2],
+    ['STU1008','Arjun Mehta','arjun.mehta@itmud.in','B.Pharm','Pharmacy',2],
+    ['STU1009','Sana Khan','sana.khan@itmud.in','B.Sc Nursing','Nursing Sciences',4],
+    ['STU1010','Devansh Rao','devansh.rao@itmud.in','MBA','Business & Management',1]
   ];
   const COURSE_OPTIONS = [
     'B.Tech Computer Science', 'B.Tech Computer Science & Engineering',
@@ -55,21 +65,23 @@
     const base12 = 68 + ((index * 9) % 28);
     const semesters = Array.from({ length: 8 }, (_, i) => {
       const semIndex = i + 1;
-      const sgpa = Number((6.6 + ((index * 3 + semIndex * 2) % 29) / 10).toFixed(2));
-      return { label: `Semester ${semIndex}`, sgpa, credits: 20 + (semIndex % 2) * 2, attendance: 72 + ((index * 5 + semIndex * 3) % 25), backlogs: (index + semIndex) % 13 === 0 ? 1 : 0 };
+      const isCompleted = semIndex <= Number(year) * 2;
+      const sgpa = isCompleted ? Number((6.1 + ((index * 5 + semIndex * 3) % 36) / 10).toFixed(2)) : '';
+      return { label: `Semester ${semIndex}`, sgpa, credits: isCompleted ? 20 + (semIndex % 2) * 2 : '', attendance: isCompleted ? 66 + ((index * 7 + semIndex * 5) % 33) : '', backlogs: isCompleted ? ((index + semIndex) % 11 === 0 ? 1 : 0) : 0 };
     });
     const activities = index % 3 === 0 ? [
       { id: `ACT-${id}-1`, title: 'Tech Fest Volunteer', type: 'Volunteering', date: '2026-08-18', description: 'Helped coordinate student registrations and event flow.' },
       { id: `ACT-${id}-2`, title: 'Presentation Skills Workshop', type: 'Workshop', date: '2026-09-06', description: 'Completed a college communication workshop.' }
     ] : [{ id: `ACT-${id}-1`, title: index % 2 ? 'Inter-college Quiz' : 'Campus Club Meet', type: index % 2 ? 'Competition' : 'Club', date: '2026-09-12', description: 'Participated in a campus learning activity.' }];
     return {
-      id, password: 'student123', profile: {
-        name, email, phone: `98${String(10000000 + index * 37191).slice(0,8)}`,
+      id, password: DEMO_PASSWORD, profile: {
+        name, email, phone: String(9000000101 + index),
         dob: `${String(4 + (index % 22)).padStart(2,'0')}-0${1 + (index % 8)}-200${4 + (index % 4)}`,
         gender: index % 2 ? 'Female' : 'Male', address: 'Gwalior, Madhya Pradesh', guardian: `Parent / Guardian of ${name.split(' ')[0]}`,
         rollNo: `CS26${String(100 + index)}`, course, department, currentYear: year,
         section: ['A','B','C'][index % 3], admissionYear: 2026 - year + 1, expectedGraduation: 2026 - year + 4,
-        feeStatus: index % 4 === 0 ? 'Partly paid' : 'Paid', feePaid: 45000 + (index % 5) * 5000
+        feeStatus: ['Paid','Pending','Partly paid','Scholarship','Paid','Partly paid','Pending','Paid','Scholarship','Paid'][index % 10],
+        feePaid: [125000,0,48000,90000,100000,76000,0,118000,85000,142000][index % 10]
       },
       academics: {
         class10: { board: index % 2 ? 'CBSE' : 'MP Board', school: `${['Central Public School','Sunrise Academy','City Model School'][index % 3]}`, passingYear: 2020 + (index % 4), marks: base10, maxMarks: 100, percentage: base10 },
@@ -79,52 +91,66 @@
       activities,
       attendance: 75 + ((index * 7) % 23),
       achievements: index % 4 === 0 ? ['Department Merit Mention','Certificate of Participation'] : ['Certificate of Participation'],
-      notes: 'Demo record — verify details before using in a real institution.'
+      notes: 'Fictional demonstration record — all names, contact details and academic details are sample data.'
     };
   }
 
   function seedDatabase() {
     const students = studentSeed.map(makeSeedStudent);
+    const faculty = [
+      { email: 'manish.g@direct.itmud.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Manish Gupta', phone: '9000000201', department: 'Computer Science & Intelligent Systems', course: 'B.Tech Computer Science & Engineering' },
+      { email: 'priya.s@direct.itmud.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Priya Sharma', phone: '9000000202', department: 'Business & Management', course: 'BBA / BBA (Honours / Research)' },
+      { email: 'rahul.m@direct.itmud.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Rahul Mehta', phone: '9000000203', department: 'Pharmacy', course: 'B.Pharm' }
+    ];
+    const admin = { email: 'admin@ace.demo', password: DEMO_PASSWORD, role: 'admin', name: 'Ace Records Administrator', phone: '9000000200', department: 'Administration', course: 'University Administration' };
     const users = [
-      { email: 'admin@ace.demo', password: 'AceAdmin@2026', role: 'admin', name: 'Ace Records Administrator', phone: '', department: 'Administration', course: 'University Administration' },
-      { email: 'faculty@ace.demo', password: 'manish@itmuni', role: 'faculty', name: 'Manish Gupta', phone: '', department: 'Computer Science', course: 'B.Tech Computer Science' },
-      ...students.map(s => ({ email: s.profile.email, password: s.password, role: 'student', name: s.profile.name, studentId: s.id }))
+      admin,
+      ...faculty,
+      ...students.map(student => ({ email: student.profile.email, password: DEMO_PASSWORD, role: 'student', name: student.profile.name, studentId: student.id }))
     ];
     return {
-      version: 3,
+      version: 4,
       users,
       students,
       events: [],
       requests: [],
-      logs: [{ id: 'LOG-INIT', timestamp: new Date().toISOString(), actor: 'Ace Records', role: 'system', action: 'WORKSPACE CREATED', studentId: '', details: 'Admin, faculty and student accounts are ready.' }]
+      logs: [{ id: 'LOG-INIT', timestamp: new Date().toISOString(), actor: 'Ace Records', role: 'system', action: 'DEMO WORKSPACE CREATED', studentId: '', details: 'Three faculty and ten student example accounts are loaded. All sample accounts use the shared demonstration password.' }]
     };
   }
 
   function normalizeDatabase(parsed) {
+    const demoDefaults = seedDatabase();
+    const sampleStudentIds = new Set(demoDefaults.students.map(student => student.id));
     const legacyDemoIds = new Set(Array.from({ length: 19 }, (_, i) => `STU${1002 + i}`));
-    parsed.students = (parsed.students || []).filter(student => !legacyDemoIds.has(student.id));
-    const validStudentIds = new Set(parsed.students.map(student => student.id));
-    parsed.users = (parsed.users || []).filter(user => user.role === 'admin' || user.role === 'faculty' || (user.role === 'student' && validStudentIds.has(user.studentId)));
+
+    // Replace only reserved sample IDs with the current sample records.
+    // All accounts and records created by the site owner are retained.
+    parsed.students = (parsed.students || []).filter(student => !sampleStudentIds.has(student.id) && !legacyDemoIds.has(student.id));
+    parsed.users = (parsed.users || []).filter(user =>
+      user.role === 'admin' ||
+      user.role === 'faculty' ||
+      (user.role === 'student' && parsed.students.some(student => student.id === user.studentId))
+    );
+
+    // Update the built-in Admin credentials without changing any custom Admin accounts.
     let admin = parsed.users.find(user => user.role === 'admin' && user.email === 'admin@ace.demo');
-    if (!admin) {
-      admin = { email: 'admin@ace.demo', password: 'AceAdmin@2026', role: 'admin', name: 'Ace Records Administrator', phone: '', department: 'Administration', course: 'University Administration' };
-      parsed.users.unshift(admin);
-    } else {
-      admin.password = admin.password || 'AceAdmin@2026';
-      admin.name = admin.name || 'Ace Records Administrator';
+    const seededAdmin = demoDefaults.users.find(user => user.role === 'admin');
+    if (admin) Object.assign(admin, seededAdmin);
+    else parsed.users.unshift({ ...seededAdmin });
+
+    // Rename the previous generic faculty demo account to the sample Manish Gupta account.
+    const oldFaculty = parsed.users.find(user => user.role === 'faculty' && user.email === 'faculty@ace.demo');
+    const facultyDefaults = demoDefaults.users.filter(user => user.role === 'faculty');
+    facultyDefaults.forEach((sampleFaculty, index) => {
+      let existing = parsed.users.find(user => user.role === 'faculty' && user.email === sampleFaculty.email);
+      if (!existing && index === 0 && oldFaculty) existing = oldFaculty;
+      if (existing) Object.assign(existing, sampleFaculty);
+      else parsed.users.push({ ...sampleFaculty });
+    });
+    if (oldFaculty && oldFaculty.email === 'faculty@ace.demo') {
+      parsed.users = parsed.users.filter(user => user !== oldFaculty);
     }
-    let faculty = parsed.users.find(user => user.role === 'faculty' && user.email === 'faculty@ace.demo');
-    if (!faculty && !parsed.users.some(user => user.role === 'faculty')) {
-      faculty = { email: 'faculty@ace.demo', password: 'manish@itmuni', role: 'faculty', name: 'Manish Gupta', department: 'Computer Science', designation: 'Faculty' };
-      parsed.users.unshift(faculty);
-    } else if (faculty) {
-      if (!faculty.name || faculty.name === 'Demo Faculty') faculty.name = 'Manish Gupta';
-      if (!faculty.password || faculty.password === 'faculty123') faculty.password = 'manish@itmuni';
-      faculty.department = faculty.department || 'Computer Science';
-      faculty.course = faculty.course || 'B.Tech Computer Science';
-      faculty.phone = faculty.phone || '';
-      faculty.designation = faculty.designation || 'Faculty';
-    }
+
     parsed.events = Array.isArray(parsed.events) ? parsed.events : [];
     parsed.events.forEach(event => {
       event.signups = Array.isArray(event.signups) ? event.signups : [];
@@ -132,23 +158,24 @@
     });
     parsed.requests = Array.isArray(parsed.requests) ? parsed.requests : [];
     parsed.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
+
+    // Restore the ten reserved sample student profiles and their logins.
+    demoDefaults.students.forEach(student => {
+      student.academics.semesters = Array.from({ length: 8 }, (_, index) =>
+        student.academics.semesters?.[index] || ({ label: `Semester ${index + 1}`, sgpa: '', credits: '', attendance: '', backlogs: 0 })
+      );
+    });
+    parsed.students.push(...demoDefaults.students);
+    parsed.users.push(...demoDefaults.users.filter(user => user.role === 'student'));
+
     parsed.students.forEach(student => {
       if (student.cgpaOverride === undefined) student.cgpaOverride = '';
       student.academics = student.academics || {};
-      student.academics.semesters = Array.from({ length: 8 }, (_, index) => student.academics.semesters?.[index] || ({ label: `Semester ${index + 1}`, sgpa: '', credits: '', attendance: '', backlogs: 0 }));
+      student.academics.semesters = Array.from({ length: 8 }, (_, index) =>
+        student.academics.semesters?.[index] || ({ label: `Semester ${index + 1}`, sgpa: '', credits: '', attendance: '', backlogs: 0 })
+      );
     });
-    // Always restore the built-in demo accounts if an older browser database is missing them.
-    const demoDefaults = seedDatabase();
-    demoDefaults.students.forEach(student => {
-      if (!parsed.students.some(existing => existing.id === student.id)) parsed.students.push(student);
-    });
-    demoDefaults.users.forEach(user => {
-      if (!parsed.users.some(existing =>
-        String(existing.email || '').toLowerCase() === user.email.toLowerCase() &&
-        existing.role === user.role
-      )) parsed.users.push(user);
-    });
-    parsed.version = 3;
+    parsed.version = 4;
     return parsed;
   }
 
