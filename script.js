@@ -108,11 +108,11 @@
   function seedDatabase() {
     const students = studentSeed.map(makeSeedStudent);
     const faculty = [
-      { email: 'manish.g@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Manish Gupta', phone: '9000000201', department: 'Computer Science & Intelligent Systems', course: 'B.Tech Computer Science & Engineering' },
-      { email: 'priya.s@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Priya Sharma', phone: '9000000202', department: 'Business & Management', course: 'BBA / BBA (Honours / Research)' },
-      { email: 'rahul.m@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Rahul Mehta', phone: '9000000203', department: 'Pharmacy', course: 'B.Pharm' }
+      { id: 'FAC001', email: 'manish.g@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Manish Gupta', phone: '9000000201', department: 'Computer Science & Intelligent Systems', course: 'B.Tech Computer Science & Engineering' },
+      { id: 'FAC002', email: 'priya.s@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Priya Sharma', phone: '9000000202', department: 'Business & Management', course: 'BBA / BBA (Honours / Research)' },
+      { id: 'FAC003', email: 'rahul.m@itmuni.in', password: DEMO_PASSWORD, role: 'faculty', name: 'Rahul Mehta', phone: '9000000203', department: 'Pharmacy', course: 'B.Pharm' }
     ];
-    const admin = { email: 'admin@itmuni.in', password: DEMO_PASSWORD, role: 'admin', name: 'Ace Records Administrator', phone: '9000000200', department: 'Administration', course: 'University Administration' };
+    const admin = { id: 'ADM001', email: 'admin@itmuni.in', password: DEMO_PASSWORD, role: 'admin', name: 'Ace Records Administrator', phone: '9000000200', department: 'Administration', course: 'University Administration' };
     const users = [admin, ...faculty, ...students.map(student => ({ email: student.profile.email, password: DEMO_PASSWORD, role: 'student', name: student.profile.name, studentId: student.id }))];
     return {
       version: 5, users, students, events: [], requests: [],
