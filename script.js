@@ -17,6 +17,36 @@
   const studentSeed = [
     ['STU1001','Ayush Agnihotri','ayush@student.demo','B.Tech Computer Science','Computer Science',2]
   ];
+  const COURSE_OPTIONS = [
+    'B.Tech Computer Science', 'B.Tech Computer Science & Engineering',
+    'B.Tech Computer Science & Engineering (Artificial Intelligence & Machine Learning)',
+    'B.Tech Computer Science & Engineering (Data Science)', 'B.Tech Computer Science & Engineering (Cyber Security)',
+    'B.Tech Information Technology', 'B.Tech Electronics & Communication Engineering',
+    'B.Tech Electrical Engineering', 'B.Tech Mechanical Engineering', 'B.Tech Civil Engineering',
+    'B.Tech + M.Tech / MBA (Integrated)', 'BCA / BCA (Honours / Research)', 'BBA / BBA (Honours / Research)',
+    'B.Com / B.Com (Honours / Research)', 'B.Com Digital Sales & Marketing',
+    'B.Com Real Estate & Property Management', 'B.Pharm', 'B.Sc Nursing', 'B.Sc Agriculture',
+    'B.Sc Forensic Science', 'B.Sc Biotechnology', 'B.Sc Microbiology', 'B.Sc Food Technology',
+    'B.Sc PCM / Computer Science', 'B.Sc Interior Design / Fashion Design', 'B.P.E.S', 'B.P.Ed', 'B.Ed',
+    'B.A. LL.B (Honours)', 'BBA LL.B (Honours)', 'B.Com LL.B (Honours)',
+    'B.A. Journalism & Mass Communication', 'Bachelor of Physiotherapy (BPT)',
+    'BMLT (Medical Laboratory Technology)', 'M.Tech', 'MCA', 'MBA', 'M.Pharm', 'M.Sc Nursing',
+    'M.Sc Agriculture', 'M.Sc Food Technology', 'M.Sc Biotechnology', 'M.Sc Mathematics',
+    'M.Sc Physics', 'M.Sc Chemistry', 'M.Sc Forensic Science', 'M.P.E.S', 'LL.M'
+  ];
+  const DEPARTMENT_OPTIONS = [
+    'Computer Science', 'Computer Science & Intelligent Systems', 'Computer Applications',
+    'Civil Engineering', 'Mechanical Engineering', 'Electronics & Communication Engineering',
+    'Electrical Engineering', 'Information Technology', 'Business & Management', 'Commerce', 'Law',
+    'Pharmacy', 'Nursing Sciences', 'Agriculture', 'Sciences', 'Sports Education', 'Education',
+    'Arts & Design', 'Journalism & Mass Communication', 'Medical & Allied Healthcare',
+    'Humanities & Literary Studies'
+  ];
+  function optionOptions(values, selected = '') {
+    const options = selected && !values.includes(selected) ? [selected, ...values] : values;
+    return options.map(value => `<option value="${escapeHTML(value)}" ${selected === value ? 'selected' : ''}>${escapeHTML(value)}</option>`).join('');
+  }
+
   const firstNames = ['Aarav','Anvi','Vihaan','Kiara','Rudra','Sara','Dhruv','Ishita','Yuvaan','Navya'];
   const surnames = ['Mehta','Shah','Reddy','Saxena','Chauhan','Pillai','Sinha','Kulkarni','Bhatia','Arora'];
 
@@ -57,16 +87,17 @@
   function seedDatabase() {
     const students = studentSeed.map(makeSeedStudent);
     const users = [
-      { email: 'faculty@ace.demo', password: 'manish@itmuni', role: 'faculty', name: 'Manish Gupta', department: 'Computer Science', designation: 'Faculty' },
+      { email: 'admin@ace.demo', password: 'AceAdmin@2026', role: 'admin', name: 'Ace Records Administrator', phone: '', department: 'Administration', course: 'University Administration' },
+      { email: 'faculty@ace.demo', password: 'manish@itmuni', role: 'faculty', name: 'Manish Gupta', phone: '', department: 'Computer Science', course: 'B.Tech Computer Science' },
       ...students.map(s => ({ email: s.profile.email, password: s.password, role: 'student', name: s.profile.name, studentId: s.id }))
     ];
     return {
-      version: 2,
+      version: 3,
       users,
       students,
       events: [],
       requests: [],
-      logs: [{ id: 'LOG-INIT', timestamp: new Date().toISOString(), actor: 'Ace Records demo', role: 'system', action: 'DEMO DATABASE CREATED', studentId: '', details: 'One student demo account and faculty access were loaded into this browser.' }]
+      logs: [{ id: 'LOG-INIT', timestamp: new Date().toISOString(), actor: 'Ace Records', role: 'system', action: 'WORKSPACE CREATED', studentId: '', details: 'Admin, faculty and student accounts are ready.' }]
     };
   }
 
@@ -74,7 +105,15 @@
     const legacyDemoIds = new Set(Array.from({ length: 19 }, (_, i) => `STU${1002 + i}`));
     parsed.students = (parsed.students || []).filter(student => !legacyDemoIds.has(student.id));
     const validStudentIds = new Set(parsed.students.map(student => student.id));
-    parsed.users = (parsed.users || []).filter(user => user.role === 'faculty' || (user.role === 'student' && validStudentIds.has(user.studentId)));
+    parsed.users = (parsed.users || []).filter(user => user.role === 'admin' || user.role === 'faculty' || (user.role === 'student' && validStudentIds.has(user.studentId)));
+    let admin = parsed.users.find(user => user.role === 'admin' && user.email === 'admin@ace.demo');
+    if (!admin) {
+      admin = { email: 'admin@ace.demo', password: 'AceAdmin@2026', role: 'admin', name: 'Ace Records Administrator', phone: '', department: 'Administration', course: 'University Administration' };
+      parsed.users.unshift(admin);
+    } else {
+      admin.password = admin.password || 'AceAdmin@2026';
+      admin.name = admin.name || 'Ace Records Administrator';
+    }
     let faculty = parsed.users.find(user => user.role === 'faculty' && user.email === 'faculty@ace.demo');
     if (!faculty && !parsed.users.some(user => user.role === 'faculty')) {
       faculty = { email: 'faculty@ace.demo', password: 'manish@itmuni', role: 'faculty', name: 'Manish Gupta', department: 'Computer Science', designation: 'Faculty' };
@@ -83,9 +122,15 @@
       if (!faculty.name || faculty.name === 'Demo Faculty') faculty.name = 'Manish Gupta';
       if (!faculty.password || faculty.password === 'faculty123') faculty.password = 'manish@itmuni';
       faculty.department = faculty.department || 'Computer Science';
+      faculty.course = faculty.course || 'B.Tech Computer Science';
+      faculty.phone = faculty.phone || '';
       faculty.designation = faculty.designation || 'Faculty';
     }
     parsed.events = Array.isArray(parsed.events) ? parsed.events : [];
+    parsed.events.forEach(event => {
+      event.signups = Array.isArray(event.signups) ? event.signups : [];
+      event.signupDeadline = event.signupDeadline || event.date || '';
+    });
     parsed.requests = Array.isArray(parsed.requests) ? parsed.requests : [];
     parsed.logs = Array.isArray(parsed.logs) ? parsed.logs : [];
     parsed.students.forEach(student => {
@@ -104,7 +149,7 @@
         existing.role === user.role
       )) parsed.users.push(user);
     });
-    parsed.version = 2;
+    parsed.version = 3;
     return parsed;
   }
 
@@ -185,10 +230,18 @@
     return `<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div>${right || `<div class="date-chip">☀ ${new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>`}</div>`;
   }
   function navItems() {
-    if (activeUser.role === 'faculty') return [
-      ['dashboard','⌂','Overview'], ['students','🎒','Student directory'], ['faculty','🧑‍🏫','Faculty directory'], ['approvals','✓','Approval inbox', getPendingCount()], ['activities','✦','Activities'], ['audit','◷','Audit trail']
+    if (activeUser.role === 'admin') return [
+      ['dashboard','⌂','Admin overview'], ['students','🎒','Student directory'], ['faculty','🧑‍🏫','Faculty accounts'],
+      ['approvals','✓','Approval inbox', getPendingCount()], ['activities','✦','Activities'], ['audit','◷','Audit trail']
     ];
-    return [['dashboard','⌂','Dashboard'], ['my-records','▤','My academics'], ['activities','✦','My activities'], ['corrections','↗','Correction requests', db.requests.filter(r => r.studentId === activeUser.studentId && r.status === 'Pending').length], ['audit','◷','My activity log']];
+    if (activeUser.role === 'faculty') return [
+      ['dashboard','⌂','Faculty overview'], ['students','🎒','Student directory'],
+      ['approvals','✓','Approval inbox', getPendingCount()], ['activities','✦','Activities'], ['my-profile','♙','My account']
+    ];
+    return [
+      ['dashboard','⌂','Dashboard'], ['my-records','▤','My academics'], ['activities','✦','Activities'],
+      ['corrections','↗','Correction requests', db.requests.filter(r => r.studentId === activeUser.studentId && r.status === 'Pending').length]
+    ];
   }
   function renderNav() {
     $('#sideNav').innerHTML = navItems().map(([id, icon, label, count]) => `<button type="button" class="nav-item ${currentView === id ? 'active' : ''}" data-view="${id}"><span class="nav-icon">${icon}</span><span>${label}</span>${count ? `<span class="nav-count">${count}</span>` : ''}</button>`).join('');
@@ -201,19 +254,26 @@
   }
 
   function renderDashboard() {
-    if (activeUser.role === 'faculty') {
+    if (activeUser.role === 'faculty' || activeUser.role === 'admin') {
+      const isAdmin = activeUser.role === 'admin';
       const total = db.students.length;
       const avgAttend = total ? Math.round(db.students.reduce((sum, s) => sum + averageAttendance(s), 0) / total) : 0;
       const cgpaValues = db.students.map(student => Number(cgpa(student))).filter(Number.isFinite);
       const avgCgpa = cgpaValues.length ? (cgpaValues.reduce((sum, value) => sum + value, 0) / cgpaValues.length).toFixed(2) : '—';
       const latest = db.logs.slice(0,5);
       const requests = db.requests.filter(r => r.status === 'Pending').slice(0,4);
-      return `${pageHeading('Faculty overview', 'A clear snapshot of your students, their progress and updates.')}
+      return `${pageHeading(isAdmin ? 'Admin overview' : 'Faculty overview', isAdmin ? 'Manage students, faculty accounts, activities and approvals.' : 'A clear snapshot of your students, their progress and updates.')}
         <div class="welcome-banner"><div><h2>Hello, ${escapeHTML(activeUser.name)}! 👋</h2><p>Your faculty workspace is ready. Review requests and keep student records moving forward.</p></div><div class="welcome-emoji">🧑‍🏫</div></div>
         <div class="stats-grid">${statCard('Total students', total, '🎒', 'Across demo departments')}${statCard('Pending approvals', getPendingCount(), '📝', 'Waiting for your review')}${statCard('Average attendance', `${avgAttend}%`, '📅', 'Across all demo records')}${statCard('Average CGPA', avgCgpa, '⭐', 'Based on available semesters')}</div>
         <div class="dashboard-grid"><section class="panel"><div class="panel-heading"><h3>Needs your attention</h3><button class="text-action" data-view="approvals">Open inbox →</button></div>${requests.length ? requests.map(requestCard).join('') : `<div class="empty-state"><b>All caught up! 🎉</b>No pending corrections right now.</div>`}</section>
         <section class="panel"><div class="panel-heading"><h3>Recent activity</h3><button class="text-action" data-view="audit">View all →</button></div><div class="log-list">${latest.map(logRow).join('')}</div></section></div>
-        <div class="quick-actions"><button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button><button class="btn btn-plain btn-small" data-view="students">Browse student directory</button><button class="btn btn-plain btn-small" data-action="export">⇩ Export records</button><button class="btn btn-plain btn-small" data-view="faculty">Manage faculty</button><button class="btn btn-plain btn-small" data-action="add-event">＋ Add college activity</button></div>`;
+        <div class="quick-actions">
+          <button class="btn btn-blue btn-small" data-view="students">Browse student directory</button>
+          <button class="btn btn-plain btn-small" data-view="approvals">Open approval inbox</button>
+          <button class="btn btn-plain btn-small" data-view="activities">View activities</button>
+          ${isAdmin ? '<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button><button class="btn btn-plain btn-small" data-view="faculty">Manage faculty</button><button class="btn btn-plain btn-small" data-action="add-event">＋ Create activity</button>' : ''}
+          <button class="btn btn-plain btn-small" data-action="export">⇩ Export records</button>
+        </div>`;
     }
     const student = getCurrentStudent();
     if (!student) return `<div class="empty-state"><b>Student record not found</b>Sign out and use a demo login.</div>`;
@@ -254,125 +314,193 @@
     return `<article class="request-card"><div><h4>${escapeHTML(event.title)}</h4><p><strong>${escapeHTML(event.type || 'College activity')}</strong> · ${formatDate(event.date)}${event.time ? ` · ${escapeHTML(event.time)}` : ''}</p><p>📍 ${escapeHTML(event.venue || 'Venue to be announced')}</p><p>${escapeHTML(event.description || '')}</p>${event.marks !== '' && event.marks !== null && event.marks !== undefined ? `<div class="request-meta"><span class="pill">Marks / points: ${escapeHTML(event.marks)}</span></div>` : ''}</div>${allowActions ? `<div class="request-actions"><button class="tiny-btn" data-action="edit-event" data-id="${event.id}">Edit</button><button class="tiny-btn danger" data-action="delete-event" data-id="${event.id}">Delete</button></div>` : ''}</article>`;
   }
 
+  function eventCard(event, allowActions = false, allowSignup = false) {
+    const signups = Array.isArray(event.signups) ? event.signups : [];
+    const studentId = activeUser?.studentId;
+    const registered = studentId ? signups.some(entry => entry.studentId === studentId) : false;
+    const today = new Date().toISOString().slice(0,10);
+    const deadline = event.signupDeadline || event.date;
+    const registrationClosed = today > deadline || today > event.date;
+    return `<article class="request-card"><div>
+      <h4>${escapeHTML(event.title)}</h4>
+      <p><strong>${escapeHTML(event.type || 'College activity')}</strong> · ${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')}</p>
+      <p>📍 ${escapeHTML(event.venue || 'Venue to be announced')}</p>
+      <p>${escapeHTML(event.description || '')}</p>
+      <div class="request-meta"><span class="pill">Registration closes: ${formatDate(deadline)}</span><span class="pill">${signups.length} signed up</span>${event.marks !== '' && event.marks !== null && event.marks !== undefined ? `<span class="pill">Marks / points: ${escapeHTML(event.marks)}</span>` : ''}</div>
+    </div>
+    ${allowActions ? `<div class="request-actions"><button class="tiny-btn" data-action="edit-event" data-id="${event.id}">Edit</button><button class="tiny-btn danger" data-action="delete-event" data-id="${event.id}">Delete</button></div>` : ''}
+    ${allowSignup ? `<div class="request-actions">${registered ? '<span class="pill approved">Signed up ✓</span><button class="tiny-btn danger" data-action="cancel-signup" data-id="' + event.id + '">Cancel sign-up</button>' : registrationClosed ? '<span class="pill rejected">Registration closed</span>' : '<button class="btn btn-blue btn-small" data-action="signup-event" data-id="' + event.id + '">Sign up →</button>'}</div>` : ''}
+    </article>`;
+  }
+
   function renderActivities() {
-    const students = activeUser.role === 'student' ? [getCurrentStudent()] : db.students;
-    const activities = students.filter(Boolean).flatMap(student => (student.activities || []).map(activity => ({ ...activity, student: student.profile.name, studentId: student.id }))).sort((a,b) => String(b.date).localeCompare(String(a.date)));
-    const events = (db.events || []).slice().sort((a,b) => `${b.date || ''} ${b.time || ''}`.localeCompare(`${a.date || ''} ${a.time || ''}`));
-    if (activeUser.role === 'faculty') {
-      return `${pageHeading('Activities & college events', 'Create and manage college activities, events and optional marks.', `<button class="btn btn-blue btn-small" data-action="add-event">＋ Create activity</button>`)}
-        <section class="panel"><div class="panel-heading"><h3>College activities (${events.length})</h3><span class="pill">Faculty managed</span></div>${events.length ? events.map(event => eventCard(event, true)).join('') : `<div class="empty-state"><b>No college activities yet</b>Create an activity with a date, time, venue and description.</div>`}</section>
-        <section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Student activity records (${activities.length})</h3><span class="pill">Student submissions / approved records</span></div>${activities.length ? `<div class="activity-list">${activities.map(activity => `<div class="activity-row"><span class="activity-dot">✦</span><div><strong>${escapeHTML(activity.title)}</strong><small>${escapeHTML(activity.student)} · ${escapeHTML(activity.type)} · ${formatDate(activity.date)}${activity.description ? ` · ${escapeHTML(activity.description)}` : ''}</small></div></div>`).join('')}</div>` : `<div class="empty-state">No student activities have been recorded.</div>`}</section>`;
+    const events = (db.events || []).slice().sort((a,b) => `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`));
+    const today = new Date().toISOString().slice(0,10);
+    const upcoming = events.filter(event => !event.date || event.date >= today);
+    if (activeUser.role === 'admin' || activeUser.role === 'faculty') {
+      const isAdmin = activeUser.role === 'admin';
+      return `${pageHeading(isAdmin ? 'Activities & events' : 'College activities', isAdmin ? 'Publish and manage activities students can sign up for.' : 'View activities published for students.', isAdmin ? '<button class="btn btn-blue btn-small" data-action="add-event">＋ Create activity</button>' : '')}
+        <section class="panel"><div class="panel-heading"><h3>Upcoming activities (${upcoming.length})</h3><span class="pill">${isAdmin ? 'Admin managed' : 'View only'}</span></div>${upcoming.length ? upcoming.map(event => eventCard(event, isAdmin, false)).join('') : '<div class="empty-state"><b>No upcoming activities</b>Published activities will appear here.</div>'}</section>
+        ${isAdmin ? `<section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Past activities (${events.length-upcoming.length})</h3></div>${events.filter(event => event.date && event.date < today).length ? events.filter(event => event.date && event.date < today).map(event => eventCard(event, true, false)).join('') : '<div class="empty-state">No past activities.</div>'}</section>` : ''}`;
     }
     const student = getCurrentStudent();
-    return `${pageHeading('My activities', 'Your college journey beyond the classroom — events, clubs and achievements.')}
-      <section class="panel"><div class="panel-heading"><h3>College activities & events (${events.length})</h3><span class="pill">Published by faculty</span></div>${events.length ? events.map(event => eventCard(event, false)).join('') : `<div class="empty-state">No upcoming or published college activities yet.</div>`}</section>
-      <div class="notice" style="margin-top:16px"><strong>Adding a personal achievement?</strong> Submit it as a correction request with a supporting certificate or proof. It will appear in your record after faculty approval.</div>
-      <div class="quick-actions" style="margin:0 0 15px"><button class="btn btn-yellow btn-small" data-action="new-correction" data-activity="true">＋ Submit an activity</button></div>
-      <section class="panel"><div class="panel-heading"><h3>My recorded activities (${activities.length})</h3><span class="pill">Approved student records</span></div>${activities.length ? `<div class="activity-list">${activities.filter(activity => activity.studentId === student?.id).map(activity => activityRow(activity)).join('')}</div>` : `<div class="empty-state"><b>No activities have been recorded</b>Your approved activity records will appear here.</div>`}</section>`;
+    const registrations = upcoming.filter(event => (event.signups || []).some(entry => entry.studentId === student?.id));
+    const openActivities = upcoming.filter(event => !(event.signups || []).some(entry => entry.studentId === student?.id));
+    return `${pageHeading('Activities', 'Discover university activities, sign up before the deadline and keep track of what is coming up.')}
+      <section class="panel"><div class="panel-heading"><h3>My signed-up activities (${registrations.length})</h3><span class="pill">Your registrations</span></div>
+        ${registrations.length ? registrations.map(event => `<div class="activity-row"><span class="activity-dot">✓</span><div><strong>${escapeHTML(event.title)}</strong><small>${formatDate(event.date)} · ${escapeHTML(event.time || 'Time to be announced')} · Registration completed · Deadline ${formatDate(event.signupDeadline || event.date)}</small></div><span class="pill">Upcoming</span></div>`).join('') : '<div class="empty-state"><b>You have not signed up for an activity yet.</b>Choose an activity below to register.</div>'}
+      </section>
+      <section class="panel" style="margin-top:16px"><div class="panel-heading"><h3>Activities open for sign-up (${openActivities.filter(event => today <= (event.signupDeadline || event.date)).length})</h3><span class="pill">Published by Admin</span></div>
+        ${openActivities.length ? openActivities.map(event => eventCard(event, false, true)).join('') : '<div class="empty-state">No other upcoming activities are available right now.</div>'}
+      </section>
+      <div class="notice" style="margin-top:16px"><strong>Keep an eye on the dates:</strong> Each activity shows its event date and the last date to sign up. Once the registration deadline passes, sign-up closes.</div>`;
   }
 
   function renderFaculty() {
-    if (activeUser?.role !== 'faculty') return '';
+    if (activeUser?.role !== 'admin') return '';
     const facultyMembers = db.users.filter(user => user.role === 'faculty');
-    const rows = facultyMembers.map(user => `<tr><td><strong>${escapeHTML(user.name)}</strong></td><td>${escapeHTML(user.email)}</td><td>${escapeHTML(user.designation || 'Faculty')}</td><td>${escapeHTML(user.department || '—')}</td><td><div class="table-actions"><button class="tiny-btn" data-action="edit-faculty" data-id="${encodeURIComponent(user.email)}">Edit</button>${user.email !== activeUser.email ? `<button class="tiny-btn danger" data-action="delete-faculty" data-id="${encodeURIComponent(user.email)}">Delete</button>` : `<span class="pill">Signed in</span>`}</div></td></tr>`).join('');
-    return `${pageHeading('Faculty directory', 'Create, edit and remove faculty logins for the college workspace.', `<button class="btn btn-blue btn-small" data-action="add-faculty">＋ Add faculty</button>`)}
-      <section class="panel" style="padding:0"><div class="panel-heading" style="padding:17px 17px 0"><h3>Faculty accounts</h3><span class="pill">${facultyMembers.length} accounts</span></div><div class="table-wrap" style="border:0;border-radius:0 0 13px 13px"><table class="data-table"><thead><tr><th>Name</th><th>Email / Login</th><th>Position</th><th>Department</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div></section>
-      <div class="notice" style="margin-top:15px"><strong>Access reminder:</strong> Share login credentials privately. This browser-only demo stores passwords in LocalStorage; use a secure server-side authentication system before handling real college accounts.</div>`;
+    const rows = facultyMembers.map(user => `<tr><td><strong>${escapeHTML(user.name)}</strong></td><td>${escapeHTML(user.phone || '—')}</td><td>${escapeHTML(user.email)}</td><td>${escapeHTML(user.department || '—')}</td><td>${escapeHTML(user.course || '—')}</td><td><div class="table-actions"><button class="tiny-btn" data-action="edit-faculty" data-id="${encodeURIComponent(user.email)}">Edit</button><button class="tiny-btn danger" data-action="delete-faculty" data-id="${encodeURIComponent(user.email)}">Delete</button></div></td></tr>`).join('');
+    return `${pageHeading('Faculty accounts', 'Only administrators can create, update or remove faculty logins.', `<button class="btn btn-blue btn-small" data-action="add-faculty">＋ Add faculty</button>`)}
+      <section class="panel" style="padding:0"><div class="panel-heading" style="padding:17px 17px 0"><h3>Faculty accounts</h3><span class="pill">${facultyMembers.length} accounts</span></div><div class="table-wrap" style="border:0;border-radius:0 0 13px 13px"><table class="data-table"><thead><tr><th>Name</th><th>Mobile</th><th>Email / Login</th><th>Department</th><th>Course</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div></section>
+      <div class="notice" style="margin-top:15px"><strong>Administrator permission:</strong> Faculty account management is reserved for the Admin role.</div>`;
+  }
+
+  function renderFacultyProfile() {
+    if (activeUser?.role !== 'faculty') return '';
+    const account = db.users.find(user => user.role === 'faculty' && user.email === activeUser.email) || activeUser;
+    return `${pageHeading('My faculty account', 'Your own account details. Other faculty accounts are not visible from this login.')}
+      <section class="panel"><div class="panel-heading"><h3>Account information</h3><span class="pill">Faculty</span></div>
+        <div class="detail-grid">
+          <div><small>Full name</small><strong>${escapeHTML(account.name)}</strong></div>
+          <div><small>Mobile number</small><strong>${escapeHTML(account.phone || 'Not added')}</strong></div>
+          <div><small>Email / login</small><strong>${escapeHTML(account.email)}</strong></div>
+          <div><small>Department</small><strong>${escapeHTML(account.department || 'Not assigned')}</strong></div>
+          <div><small>Course</small><strong>${escapeHTML(account.course || 'Not assigned')}</strong></div>
+        </div>
+      </section>`;
   }
 
   function openFacultyModal(email = '') {
-    if (activeUser?.role !== 'faculty') return;
+    if (activeUser?.role !== 'admin') return toast('Only an administrator can manage faculty accounts.', 'error');
     if (email) email = decodeURIComponent(email);
     const existing = email ? db.users.find(user => user.role === 'faculty' && user.email === email) : null;
     if (email && !existing) return;
     const body = `<form id="modalForm"><div class="form-grid">
-      <div class="field"><label>Full name *</label><input name="name" value="${escapeHTML(existing?.name || '')}" required /></div>
+      <div class="field"><label>Faculty name *</label><input name="name" value="${escapeHTML(existing?.name || '')}" required /></div>
+      <div class="field"><label>Mobile number *</label><input name="phone" type="tel" inputmode="tel" value="${escapeHTML(existing?.phone || '')}" required /></div>
       <div class="field"><label>Email / login *</label><input name="email" type="email" value="${escapeHTML(existing?.email || '')}" required /></div>
       <div class="field"><label>${existing ? 'New password (leave blank to keep current)' : 'Initial password *'}</label><input name="password" type="password" ${existing ? '' : 'required minlength="6"'} minlength="6" /></div>
-      <div class="field"><label>Position / designation</label><input name="designation" value="${escapeHTML(existing?.designation || 'Faculty')}" placeholder="Assistant Professor" /></div>
-      <div class="field full"><label>Department</label><input name="department" value="${escapeHTML(existing?.department || '')}" placeholder="Computer Science" /></div>
-      </div><div class="modal-actions"><button type="button" class="btn btn-plain btn-small" data-action="close-modal">Cancel</button><button class="btn btn-blue btn-small" type="submit">${existing ? 'Save faculty changes' : 'Create faculty account'}</button></div></form>`;
-    openModal(existing ? 'Edit faculty account' : 'Create faculty account', 'Set faculty identity and sign-in credentials.', body, formData => {
+      <div class="field"><label>Department headed *</label><select name="department" required><option value="">Select department</option>${optionOptions(DEPARTMENT_OPTIONS, existing?.department || '')}</select></div>
+      <div class="field"><label>Course / programme *</label><select name="course" required><option value="">Select course</option>${optionOptions(COURSE_OPTIONS, existing?.course || '')}</select></div>
+      </div><div class="modal-actions"><button type="button" class="btn btn-plain btn-small" data-action="close-modal">Cancel</button><button class="btn btn-blue btn-small" type="submit">${existing ? 'Save faculty details' : 'Create faculty account'}</button></div></form>`;
+    openModal(existing ? 'Edit faculty account' : 'Create faculty account', 'Enter only the faculty details needed for their login.', body, formData => {
       const name = String(formData.get('name')).trim();
+      const phone = String(formData.get('phone')).trim();
       const nextEmail = String(formData.get('email')).trim().toLowerCase();
       const password = String(formData.get('password') || '');
+      const department = String(formData.get('department') || '');
+      const course = String(formData.get('course') || '');
+      if (!/^\+?[0-9 ()-]{8,18}$/.test(phone)) return toast('Enter a valid faculty mobile number.', 'error');
       const duplicate = db.users.some(user => user.email.toLowerCase() === nextEmail && user !== existing);
       if (duplicate) return toast('That email is already assigned to an account.', 'error');
       if (!existing && password.length < 6) return toast('Password must be at least 6 characters.', 'error');
       if (existing) {
         const oldEmail = existing.email;
-        existing.name = name; existing.email = nextEmail;
-        existing.designation = String(formData.get('designation') || 'Faculty').trim();
-        existing.department = String(formData.get('department') || '').trim();
+        Object.assign(existing, { name, phone, email: nextEmail, department, course });
         if (password) existing.password = password;
         if (activeUser.email === oldEmail) {
           activeUser = { ...existing };
           $('#topUserName').textContent = existing.name;
           $('#userAvatar').textContent = initials(existing.name);
         }
-        logAction('FACULTY ACCOUNT EDITED', `Faculty account updated: ${oldEmail} → ${nextEmail}.`);
+        logAction('FACULTY ACCOUNT EDITED', `Administrator updated faculty account: ${oldEmail} → ${nextEmail}.`);
       } else {
-        db.users.push({ email: nextEmail, password, role: 'faculty', name, designation: String(formData.get('designation') || 'Faculty').trim(), department: String(formData.get('department') || '').trim() });
-        logAction('FACULTY ACCOUNT CREATED', `Created faculty login for ${name} (${nextEmail}).`);
+        db.users.push({ email: nextEmail, password, role: 'faculty', name, phone, department, course });
+        logAction('FACULTY ACCOUNT CREATED', `Administrator created faculty login for ${name} (${nextEmail}).`);
       }
       if (saveDatabase()) { closeModal(); renderView(); toast(existing ? 'Faculty account updated.' : 'Faculty account created.'); }
     });
   }
 
   function deleteFaculty(encodedEmail) {
-    if (activeUser?.role !== 'faculty') return;
+    if (activeUser?.role !== 'admin') return toast('Only an administrator can remove faculty accounts.', 'error');
     const email = decodeURIComponent(encodedEmail);
-    if (email === activeUser.email) return toast('You cannot delete the faculty account currently signed in.', 'error');
     const facultyMembers = db.users.filter(user => user.role === 'faculty');
     if (facultyMembers.length <= 1) return toast('At least one faculty account must remain.', 'error');
     const target = db.users.find(user => user.role === 'faculty' && user.email === email);
     if (!target) return;
     if (!window.confirm(`Delete the faculty account for ${target.name} (${target.email})?`)) return;
     db.users = db.users.filter(user => user !== target);
-    logAction('FACULTY ACCOUNT DELETED', `Deleted faculty login for ${target.name} (${target.email}).`);
+    logAction('FACULTY ACCOUNT DELETED', `Administrator deleted faculty login for ${target.name} (${target.email}).`);
     if (saveDatabase()) { renderView(); toast('Faculty account deleted.'); }
   }
 
   function openEventModal(id = '') {
-    if (activeUser?.role !== 'faculty') return;
+    if (activeUser?.role !== 'admin') return toast('Only an administrator can publish activities.', 'error');
     const existing = id ? db.events.find(event => event.id === id) : null;
     if (id && !existing) return;
     const body = `<form id="modalForm"><div class="form-grid">
-      <div class="field"><label>Activity / event title *</label><input name="title" value="${escapeHTML(existing?.title || '')}" required /></div>
-      <div class="field"><label>Type</label><select name="type">${['Workshop','Seminar','Competition','Cultural','Sports','Guest Lecture','Club','Other'].map(type => `<option ${existing?.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div>
-      <div class="field"><label>Date *</label><input name="date" type="date" value="${escapeHTML(existing?.date || '')}" required /></div>
-      <div class="field"><label>Time *</label><input name="time" type="time" value="${escapeHTML(existing?.time || '')}" required /></div>
-      <div class="field full"><label>Venue *</label><input name="venue" value="${escapeHTML(existing?.venue || '')}" required placeholder="Auditorium / Lab / Sports ground" /></div>
-      <div class="field full"><label>Description *</label><textarea name="description" required>${escapeHTML(existing?.description || '')}</textarea></div>
-      <div class="field"><label>Marks / points (optional)</label><input name="marks" type="number" min="0" max="1000" step="0.5" value="${escapeHTML(existing?.marks ?? '')}" placeholder="Leave blank if not applicable" /></div>
-      <div class="field"><div class="file-note">Optional marks can represent activity credit, competition points or assessment marks.</div></div>
-      </div><div class="modal-actions"><button type="button" class="btn btn-plain btn-small" data-action="close-modal">Cancel</button><button class="btn btn-blue btn-small" type="submit">${existing ? 'Save activity' : 'Create activity'}</button></div></form>`;
-    openModal(existing ? 'Edit college activity' : 'Create college activity', 'Set the schedule and details students will see.', body, formData => {
+      <div class="field"><label>Activity title *</label><input name="title" value="${escapeHTML(existing?.title || '')}" required /></div>
+      <div class="field"><label>Activity type *</label><select name="type">${['Workshop','Seminar','Competition','Cultural','Sports','Guest Lecture','Club','Other'].map(type => `<option ${existing?.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div>
+      <div class="field"><label>Activity date *</label><input name="date" type="date" value="${escapeHTML(existing?.date || '')}" required /></div>
+      <div class="field"><label>Activity time *</label><input name="time" type="time" value="${escapeHTML(existing?.time || '')}" required /></div>
+      <div class="field"><label>Registration deadline *</label><input name="signupDeadline" type="date" value="${escapeHTML(existing?.signupDeadline || existing?.date || '')}" required /></div>
+      <div class="field"><label>Venue *</label><input name="venue" value="${escapeHTML(existing?.venue || '')}" required placeholder="Auditorium / Lab / Sports ground" /></div>
+      <div class="field full"><label>Short description *</label><textarea name="description" rows="3" required>${escapeHTML(existing?.description || '')}</textarea></div>
+      <div class="field"><label>Marks / points (optional)</label><input name="marks" type="number" min="0" max="1000" step="0.5" value="${escapeHTML(existing?.marks ?? '')}" /></div>
+      </div><div class="modal-actions"><button type="button" class="btn btn-plain btn-small" data-action="close-modal">Cancel</button><button class="btn btn-blue btn-small" type="submit">${existing ? 'Save activity' : 'Publish activity'}</button></div></form>`;
+    openModal(existing ? 'Edit activity' : 'Create activity', 'Publish a short event listing with a student registration deadline.', body, formData => {
       const values = {
-        title: String(formData.get('title')).trim(), type: formData.get('type'), date: formData.get('date'),
-        time: formData.get('time'), venue: String(formData.get('venue')).trim(),
-        description: String(formData.get('description')).trim(), marks: formData.get('marks') === '' ? '' : Number(formData.get('marks'))
+        title: String(formData.get('title')).trim(), type: formData.get('type'),
+        date: formData.get('date'), time: formData.get('time'),
+        signupDeadline: formData.get('signupDeadline'),
+        venue: String(formData.get('venue')).trim(),
+        description: String(formData.get('description')).trim(),
+        marks: formData.get('marks') === '' ? '' : Number(formData.get('marks'))
       };
+      if (values.signupDeadline > values.date) return toast('The registration deadline cannot be after the activity date.', 'error');
       if (existing) {
         Object.assign(existing, values);
-        logAction('COLLEGE ACTIVITY EDITED', `Updated activity ${existing.title} scheduled on ${existing.date} at ${existing.time}.`);
+        logAction('COLLEGE ACTIVITY EDITED', `Admin updated activity ${existing.title}; registration deadline ${existing.signupDeadline}.`);
       } else {
-        const event = { id: `EVT-${Date.now()}`, ...values, createdAt: new Date().toISOString(), createdBy: activeUser.name };
+        const event = { id: `EVT-${Date.now()}`, ...values, signups: [], createdAt: new Date().toISOString(), createdBy: activeUser.name };
         db.events.unshift(event);
-        logAction('COLLEGE ACTIVITY CREATED', `Created ${event.title} for ${event.date} at ${event.time}, venue ${event.venue}.`);
+        logAction('COLLEGE ACTIVITY CREATED', `Admin published ${event.title} for ${event.date}; registration closes ${event.signupDeadline}.`);
       }
-      if (saveDatabase()) { closeModal(); renderView(); toast(existing ? 'College activity updated.' : 'College activity created.'); }
+      if (saveDatabase()) { closeModal(); renderView(); toast(existing ? 'Activity updated.' : 'Activity published.'); }
     });
   }
 
   function deleteEvent(id) {
-    if (activeUser?.role !== 'faculty') return;
+    if (activeUser?.role !== 'admin') return toast('Only an administrator can remove activities.', 'error');
     const event = db.events.find(item => item.id === id);
     if (!event) return;
     if (!window.confirm(`Delete the college activity “${event.title}”?`)) return;
     db.events = db.events.filter(item => item.id !== id);
     logAction('COLLEGE ACTIVITY DELETED', `Deleted activity ${event.title} scheduled for ${event.date}.`);
     if (saveDatabase()) { renderView(); toast('College activity deleted.'); }
+  }
+
+  function signUpForEvent(id, cancel = false) {
+    if (activeUser?.role !== 'student') return toast('Only students can sign up for activities.', 'error');
+    const event = db.events.find(item => item.id === id);
+    if (!event) return toast('This activity is no longer available.', 'error');
+    event.signups = Array.isArray(event.signups) ? event.signups : [];
+    const studentId = activeUser.studentId;
+    const registered = event.signups.some(entry => entry.studentId === studentId);
+    if (cancel) {
+      if (!registered) return;
+      event.signups = event.signups.filter(entry => entry.studentId !== studentId);
+      logAction('ACTIVITY SIGN-UP CANCELLED', `Cancelled registration for ${event.title}.`, studentId, { eventId: event.id });
+    } else {
+      const today = new Date().toISOString().slice(0,10);
+      const deadline = event.signupDeadline || event.date;
+      if (today > deadline || today > event.date) return toast('Registration for this activity has closed.', 'error');
+      if (registered) return toast('You are already signed up for this activity.', 'error');
+      event.signups.push({ studentId, signedUpAt: new Date().toISOString() });
+      logAction('ACTIVITY SIGN-UP', `Signed up for ${event.title}; event date ${event.date}.`, studentId, { eventId: event.id });
+    }
+    if (saveDatabase()) { renderNav(); renderView(); toast(cancel ? 'Your sign-up was cancelled.' : 'You are signed up for the activity.'); }
   }
 
   function statusPill(status) { return `<span class="pill ${String(status).toLowerCase()}">${escapeHTML(status)}</span>`; }
@@ -399,7 +527,8 @@
 
   function renderStudents() {
     const rows = db.students.map(s => `<tr><td><strong>${escapeHTML(s.profile.name)}</strong><br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.email)}</span></td><td>${escapeHTML(s.id)}<br><span style="color:#9aa5b5;font-size:9px">${escapeHTML(s.profile.rollNo)}</span></td><td>${escapeHTML(s.profile.course)}</td><td>${escapeHTML(s.profile.department)}</td><td>Year ${escapeHTML(s.profile.currentYear)}</td><td>${averageAttendance(s)}%</td><td><strong>${cgpa(s)}</strong></td><td><div class="table-actions"><button class="tiny-btn" data-action="view-student" data-id="${s.id}">View</button><button class="tiny-btn" data-action="edit-student" data-id="${s.id}">Edit</button></div></td></tr>`).join('');
-    return `${pageHeading('Student directory', 'Find, review and maintain academic information for your students.', `<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button>`)}
+    const addButton = activeUser.role === 'admin' ? '<button class="btn btn-blue btn-small" data-action="add-student">＋ Add student</button>' : '';
+    return `${pageHeading('Student directory', 'Find, review and maintain academic information for your students.', addButton)}
       <div class="toolbar"><input class="search-box" id="studentSearch" placeholder="Search by name, ID, course or email…" /><select class="filter-select" id="departmentFilter"><option value="">All departments</option>${[...new Set(db.students.map(s=>s.profile.department))].sort().map(d=>`<option>${escapeHTML(d)}</option>`).join('')}</select></div>
       <section class="panel" style="padding:0"><div class="panel-heading" style="padding:17px 17px 0"><h3>All students</h3><span class="pill">${db.students.length} records</span></div><div class="table-wrap" style="border:0;border-radius:0 0 13px 13px"><table class="data-table" id="studentsTable"><thead><tr><th>Student</th><th>Student ID</th><th>Course</th><th>Department</th><th>Year</th><th>Attendance</th><th>CGPA</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
   }
@@ -409,7 +538,8 @@
     return `<div class="log-row"><span class="log-icon">${icon}</span><div><strong>${escapeHTML(log.actor)} <span style="color:#9ba7b7;font-weight:600">· ${escapeHTML(log.action)}</span></strong><p>${escapeHTML(log.details)}${log.studentId ? ` · ${escapeHTML(log.studentId)}` : ''}</p></div><time>${formatDateTime(log.timestamp)}</time></div>`;
   }
   function renderAudit() {
-    const logs = activeUser.role === 'faculty' ? db.logs : db.logs.filter(log => log.studentId === activeUser.studentId || (log.role === 'system' && !log.studentId));
+    if (activeUser?.role !== 'admin') return '';
+    const logs = db.logs;
     return `${pageHeading('Audit trail', 'A transparent timeline of record access, edits, requests and faculty decisions.')}
       <div class="notice"><strong>Accountability matters:</strong> Each meaningful change records who performed it, when it happened and which student record was affected.</div>
       <section class="panel"><div class="panel-heading"><h3>${logs.length} activity log entries</h3><span class="pill">Newest first</span></div><div class="log-list">${logs.length ? logs.map(logRow).join('') : `<div class="empty-state">No log entries yet.</div>`}</div></section>`;
@@ -417,7 +547,7 @@
 
   function renderView() {
     const root = $('#viewRoot');
-    if (!root) return;
+    if (!root || !activeUser) return;
     const views = {
       dashboard: renderDashboard,
       'my-records': renderRecordsView,
@@ -426,9 +556,15 @@
       approvals: renderApprovals,
       students: renderStudents,
       faculty: renderFaculty,
+      'my-profile': renderFacultyProfile,
       audit: renderAudit
     };
-    if (activeUser.role === 'student' && ['approvals','students','faculty'].includes(currentView)) currentView = 'dashboard';
+    const allowed = activeUser.role === 'admin'
+      ? ['dashboard','students','faculty','approvals','activities','audit']
+      : activeUser.role === 'faculty'
+        ? ['dashboard','students','approvals','activities','my-profile']
+        : ['dashboard','my-records','activities','corrections'];
+    if (!allowed.includes(currentView)) currentView = 'dashboard';
     root.innerHTML = (views[currentView] || renderDashboard)();
     root.focus({ preventScroll: true });
   }
@@ -445,9 +581,9 @@
     $('#authScreen').classList.add('hidden');
     $('#appScreen').classList.remove('hidden');
     $('#topUserName').textContent = user.name;
-    $('#topUserRole').textContent = user.role === 'faculty' ? 'Faculty' : 'Student';
+    $('#topUserRole').textContent = user.role === 'admin' ? 'Admin' : user.role === 'faculty' ? 'Faculty' : 'Student';
     $('#userAvatar').textContent = initials(user.name);
-    $('#exportButton').classList.toggle('hidden', user.role !== 'faculty');
+    $('#exportButton').classList.toggle('hidden', !['admin','faculty'].includes(user.role));
     logAction('LOGIN', `${user.role === 'faculty' ? 'Faculty' : 'Student'} signed in.`, user.studentId || '');
     saveDatabase();
     renderNav(); renderView();
@@ -476,11 +612,11 @@
   }
   function closeModal() { $('#modalRoot').innerHTML = ''; }
 
-  function openCorrectionModal(activityMode = false) {
+  function openCorrectionModal() {
     const student = getCurrentStudent();
     if (!student) return;
-    const sectionOptions = ['Profile','Class X','Class XII', ...Array.from({length:8},(_,i)=>`Semester ${i+1}`), 'Activity'];
-    const defaultSection = activityMode ? 'Activity' : 'Profile';
+    const sectionOptions = ['Profile','Class X','Class XII', ...Array.from({length:8},(_,i)=>`Semester ${i+1}`)];
+    const defaultSection = 'Profile';
     const body = `<form id="modalForm"><div class="form-grid">
       <div class="field"><label for="requestSection">Record section *</label><select id="requestSection" name="section" required>${sectionOptions.map(s=>`<option ${s===defaultSection?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="requestField">Field to update *</label><select id="requestField" name="field" required></select></div>
@@ -489,7 +625,7 @@
       <div class="field full"><label for="requestEvidence">Supporting document *</label><input id="requestEvidence" name="evidence" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" required /><small>Upload a marksheet, certificate or other relevant proof. Maximum file size: 700 KB.</small></div>
       <div class="field full"><div class="file-note">🔐 The request stays pending until a faculty member reviews the attached document. Your existing record will not change before approval.</div></div>
       </div><div class="modal-actions"><button type="button" class="btn btn-plain btn-small" data-action="close-modal">Cancel</button><button class="btn btn-blue btn-small" type="submit">Submit for approval →</button></div></form>`;
-    openModal(activityMode ? 'Submit an activity' : 'Request a record correction', 'Attach proof so faculty can verify your update.', body, async (formData, form) => {
+    openModal('Request a record correction', 'Attach proof so faculty can verify your update.', body, async (formData, form) => {
       const file = form.querySelector('[name="evidence"]').files[0];
       if (!file) return toast('Please attach a supporting document.', 'error');
       if (file.size > MAX_EVIDENCE_BYTES) return toast('Please choose a file smaller than 700 KB.', 'error');
@@ -512,10 +648,9 @@
       const value = sectionSelect.value;
       const options = value === 'Profile' ? ['phone','email','address','guardian','department','course','currentYear']
         : value === 'Class X' || value === 'Class XII' ? ['marks','board','school','passingYear', ...(value === 'Class XII' ? ['stream'] : [])]
-        : value.startsWith('Semester ') ? ['sgpa','attendance','credits','backlogs']
-        : ['Activity title'];
-      fieldSelect.innerHTML = options.map(v=>`<option value="${escapeHTML(v)}">${escapeHTML(v === 'currentYear' ? 'Current year' : v === 'Activity title' ? 'Activity title' : v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
-      $('#requestValue').placeholder = value === 'Activity' ? 'Describe the activity, type, date and what you did…' : 'Enter the correct value…';
+        : ['sgpa','attendance','credits','backlogs'];
+      fieldSelect.innerHTML = options.map(v=>`<option value="${escapeHTML(v)}">${escapeHTML(v === 'currentYear' ? 'Current year' : v.charAt(0).toUpperCase()+v.slice(1))}</option>`).join('');
+      $('#requestValue').placeholder = 'Enter the correct value…';
     };
     sectionSelect.addEventListener('change', updateFields);
     updateFields();
@@ -597,7 +732,7 @@
   }
 
   function openAddStudentModal() {
-    if (activeUser?.role !== 'faculty') return;
+    if (activeUser?.role !== 'admin') return toast('Only an administrator can create student accounts.', 'error');
     const body = `<form id="modalForm"><div class="form-grid">
       <div class="field"><label>Full name *</label><input name="name" required /></div>
       <div class="field"><label>Student email / username *</label><input name="email" type="email" required /></div>
@@ -605,8 +740,8 @@
       <div class="field"><label>Mobile number *</label><input name="phone" inputmode="tel" required /></div>
       <div class="field"><label>Date of birth</label><input name="dob" type="date" /></div>
       <div class="field"><label>Gender</label><select name="gender"><option value="">Select</option><option>Female</option><option>Male</option><option>Other</option></select></div>
-      <div class="field"><label>Course *</label><input name="course" placeholder="B.Tech Computer Science" required /></div>
-      <div class="field"><label>Department *</label><input name="department" placeholder="Computer Science" required /></div>
+      <div class="field"><label>Course / programme *</label><select name="course" required><option value="">Select course</option>${optionOptions(COURSE_OPTIONS)}</select></div>
+      <div class="field"><label>Department / school *</label><select name="department" required><option value="">Select department</option>${optionOptions(DEPARTMENT_OPTIONS)}</select></div>
       <div class="field"><label>Current year *</label><select name="year">${[1,2,3,4].map(n=>`<option value="${n}">${n}</option>`).join('')}</select></div>
       <div class="field"><label>Roll number *</label><input name="rollNo" required /></div>
       <div class="field"><label>Section</label><select name="section"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
@@ -685,15 +820,15 @@
   }
 
   function openEditStudentModal(id) {
-    if (activeUser?.role !== 'faculty') return;
+    if (!['faculty','admin'].includes(activeUser?.role)) return toast('You do not have permission to edit student records.', 'error');
     const student = getStudent(id); if (!student) return;
     const p = student.profile;
     const body = `<form id="modalForm"><div class="form-grid">
       <div class="field"><label>Full name</label><input name="name" value="${escapeHTML(p.name)}" required /></div>
       <div class="field"><label>Email</label><input name="email" type="email" value="${escapeHTML(p.email)}" required /></div>
       <div class="field"><label>Mobile number</label><input name="phone" value="${escapeHTML(p.phone)}" /></div>
-      <div class="field"><label>Course</label><input name="course" value="${escapeHTML(p.course)}" required /></div>
-      <div class="field"><label>Department</label><input name="department" value="${escapeHTML(p.department)}" required /></div>
+      <div class="field"><label>Course / programme</label><select name="course" required>${optionOptions(COURSE_OPTIONS, p.course)}</select></div>
+      <div class="field"><label>Department / school</label><select name="department" required>${optionOptions(DEPARTMENT_OPTIONS, p.department)}</select></div>
       <div class="field"><label>Current year</label><select name="currentYear">${[1,2,3,4].map(n=>`<option value="${n}" ${Number(p.currentYear)===n?'selected':''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Fee status</label><select name="feeStatus">${['Paid','Partly paid','Pending','Scholarship'].map(v=>`<option ${p.feeStatus===v?'selected':''}>${v}</option>`).join('')}</select></div>
       <div class="field"><label>CGPA override (optional)</label><input name="cgpaOverride" type="number" min="0" max="10" step="0.01" value="${escapeHTML(student.cgpaOverride ?? '')}" placeholder="Auto-calculate if blank" /></div>
@@ -733,7 +868,7 @@
   }
 
   function exportExcel() {
-    if (activeUser?.role !== 'faculty') return toast('Excel export is available to faculty accounts only.', 'error');
+    if (!['admin','faculty'].includes(activeUser?.role)) return toast('Excel export is available to staff accounts only.', 'error');
     const students = db.students;
     const studentRows = students.map(s => ({
       'Student ID': s.id, 'Name': s.profile.name, 'Email': s.profile.email, 'Mobile': s.profile.phone, 'Roll No': s.profile.rollNo,
@@ -777,7 +912,9 @@
     const { action, id } = actionButton.dataset;
     switch (action) {
       case 'export': exportExcel(); break;
-      case 'new-correction': openCorrectionModal(actionButton.dataset.activity === 'true'); break;
+      case 'new-correction': openCorrectionModal(); break;
+      case 'signup-event': signUpForEvent(id, false); break;
+      case 'cancel-signup': signUpForEvent(id, true); break;
       case 'close-modal': closeModal(); break;
       case 'approve-request': reviewRequest(id, true); break;
       case 'reject-request': reviewRequest(id, false); break;
@@ -809,12 +946,14 @@
       const input = $('#loginPassword'); input.type = input.type === 'password' ? 'text' : 'password';
     });
     $$('[data-fill-demo]').forEach(button => button.addEventListener('click', () => {
-      const role = button.dataset.fillDemo === 'faculty' ? 'faculty' : 'student';
+      const role = ['student','faculty','admin'].includes(button.dataset.fillDemo) ? button.dataset.fillDemo : 'student';
       selectedRole = role;
       $$('.role-option').forEach(item => item.classList.toggle('active', item.dataset.role === role));
-      const credentials = role === 'faculty'
-        ? { email: 'faculty@ace.demo', password: 'manish@itmuni' }
-        : { email: 'ayush@student.demo', password: 'student123' };
+      const credentials = role === 'admin'
+        ? { email: 'admin@ace.demo', password: 'AceAdmin@2026' }
+        : role === 'faculty'
+          ? { email: 'faculty@ace.demo', password: 'manish@itmuni' }
+          : { email: 'ayush@student.demo', password: 'student123' };
       $('#loginEmail').value = credentials.email;
       $('#loginPassword').value = credentials.password;
       $('#loginMessage').textContent = '';
