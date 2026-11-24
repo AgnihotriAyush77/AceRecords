@@ -1019,105 +1019,244 @@
   }
 
   function makeExcelChartTitle(text) {
-    return '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr lang="en-US"/></a:pPr><a:r><a:rPr lang="en-US" sz="1500" b="1"/><a:t>' + xmlEscape(text) + '</a:t></a:r><a:endParaRPr lang="en-US"/></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>';
+    return '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr/></a:pPr><a:r><a:t>' + xmlEscape(text) + '</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>';
   }
 
-  function makeStringCache(values) {
-    return '<c:strCache><c:ptCount val="' + values.length + '"/>' + values.map((value, index) => '<c:pt idx="' + index + '"><c:v>' + xmlEscape(value) + '</c:v></c:pt>').join('') + '</c:strCache>';
+  function packageRelsPath(partPath) {
+    const bits = partPath.split('/');
+    return bits.slice(0, -1).join('/') + '/_rels/' + bits[bits.length - 1] + '.rels';
   }
 
-  function makeNumberCache(values) {
-    return '<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="' + values.length + '"/>' + values.map((value, index) => '<c:pt idx="' + index + '"><c:v>' + Number(value || 0) + '</c:v></c:pt>').join('') + '</c:numCache>';
+  function relationshipTag(xml, id) {
+    const tags = xml.match(/<Relationship\b[^>]*\/?>/g) || [];
+    return tags.find(tag => (tag.match(/\bId="([^"]+)"/) || [])[1] === id) || null;
   }
 
-  function makeAttendanceChartXml(students) {
-    const names = students.map(student => student.profile.name || student.id);
-    const values = students.map(student => Number(averageAttendance(student) || 0));
-    const endRow = Math.max(2, students.length + 1);
-    const categoriesFormula = "'Students'!$B$2:$B$" + endRow;
-    const valuesFormula = "'Students'!$R$2:$R$" + endRow;
-    const catAxis = 48650112, valAxis = 48672768;
+  function relationshipTarget(xml, id) {
+    const tag = relationshipTag(xml, id);
+    return tag ? (tag.match(/\bTarget="([^"]+)"/) || [])[1] || null : null;
+  }
+
+  function resolvePackageTarget(ownerPart, target) {
+    if (!target) throw new Error('An OOXML relationship has no Target.');
+    if (target.startsWith('/')) return target.slice(1);
+    const parts = ownerPart.split('/').slice(0, -1);
+    target.split('/').forEach(segment => {
+      if (!segment || segment === '.') return;
+      if (segment === '..') parts.pop();
+      else parts.push(segment);
+    });
+    return parts.join('/');
+  }
+
+  function nextRelationshipId(xml) {
+    const ids = [...xml.matchAll(/\bId="rId(\d+)"/g)].map(match => Number(match[1]));
+    return 'rId' + ((ids.length ? Math.max(...ids) : 0) + 1);
+  }
+
+  function nextPackagePartIndex(zip, expression) {
+    let max = 0;
+    Object.keys(zip.files).forEach(path => {
+      const match = path.match(expression);
+      if (match) max = Math.max(max, Number(match[1]));
+    });
+    return max + 1;
+  }
+
+  function appendRelationship(xml, id, type, target) {
+    const tag = '<Relationship Id="' + id + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/' + type + '" Target="' + target + '"/>';
+    return xml.replace('</Relationships>', tag + '</Relationships>');
+  }
+
+  function insertDrawingInWorksheet(sheetXml, relationshipId) {
+    const drawingTag = '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + relationshipId + '"/>';
+    if (/<drawing\b/.test(sheetXml)) return sheetXml;
+    const afterDrawingElements = ['legacyDrawing', 'legacyDrawingHF', 'picture', 'oleObjects', 'controls', 'webPublishItems', 'tableParts', 'extLst'];
+    let insertAt = -1;
+    afterDrawingElements.forEach(name => {
+      const match = new RegExp('<' + name + '(?:\\s|/|>)').exec(sheetXml);
+      if (match && (insertAt === -1 || match.index < insertAt)) insertAt = match.index;
+    });
+    if (insertAt < 0) return sheetXml.replace('</worksheet>', drawingTag + '</worksheet>');
+    return sheetXml.slice(0, insertAt) + drawingTag + sheetXml.slice(insertAt);
+  }
+
+  async function ensureAcademicAnalysisDrawing(zip) {
+    const workbookXml = await zip.file('xl/workbook.xml').async('string');
+    const workbookRels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+    const sheetTags = workbookXml.match(/<sheet\b[^>]*\/?>/g) || [];
+    const analysisTag = sheetTags.find(tag => (tag.match(/\bname="([^"]+)"/) || [])[1] === 'Academic Analysis');
+    if (!analysisTag) throw new Error('Academic Analysis worksheet was not found.');
+    const sheetRid = (analysisTag.match(/\br:id="([^"]+)"/) || [])[1];
+    const sheetTarget = relationshipTarget(workbookRels, sheetRid);
+    if (!sheetTarget) throw new Error('The Academic Analysis worksheet relationship is missing.');
+    const sheetPath = resolvePackageTarget('xl/workbook.xml', sheetTarget);
+    let sheetXml = await zip.file(sheetPath).async('string');
+    const sheetRelsPath = packageRelsPath(sheetPath);
+    let sheetRels = zip.file(sheetRelsPath)
+      ? await zip.file(sheetRelsPath).async('string')
+      : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+
+    const existingDrawing = sheetXml.match(/<drawing\b[^>]*\br:id="([^"]+)"[^>]*\/?>/);
+    let drawingPath;
+    if (existingDrawing) {
+      const drawingTarget = relationshipTarget(sheetRels, existingDrawing[1]);
+      if (!drawingTarget) throw new Error('The worksheet has a drawing reference but no drawing relationship.');
+      drawingPath = resolvePackageTarget(sheetPath, drawingTarget);
+      if (!zip.file(drawingPath)) throw new Error('The worksheet drawing part is missing: ' + drawingPath);
+    } else {
+      const drawingIndex = nextPackagePartIndex(zip, /^xl\/drawings\/drawing(\d+)\.xml$/);
+      drawingPath = 'xl/drawings/drawing' + drawingIndex + '.xml';
+      zip.file(drawingPath, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"></xdr:wsDr>');
+      zip.file(packageRelsPath(drawingPath), '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+
+      const drawingRid = nextRelationshipId(sheetRels);
+      sheetRels = appendRelationship(sheetRels, drawingRid, 'drawing', '../drawings/drawing' + drawingIndex + '.xml');
+      zip.file(sheetRelsPath, sheetRels);
+      sheetXml = insertDrawingInWorksheet(sheetXml, drawingRid);
+      zip.file(sheetPath, sheetXml);
+    }
+
+    let contentTypes = await zip.file('[Content_Types].xml').async('string');
+    const drawingPartName = '/' + drawingPath;
+    if (!contentTypes.includes('PartName="' + drawingPartName + '"')) {
+      contentTypes = contentTypes.replace('</Types>', '<Override PartName="' + drawingPartName + '" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+      zip.file('[Content_Types].xml', contentTypes);
+    }
+    return { sheetPath, drawingPath };
+  }
+
+  function chartAnchorXml(shapeId, name, relationshipId, col, row, width, height) {
+    const emuWidth = Math.round(width * 9525);
+    const emuHeight = Math.round(height * 9525);
+    return '<xdr:oneCellAnchor>' +
+      '<xdr:from><xdr:col>' + col + '</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>' + row + '</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+      '<xdr:ext cx="' + emuWidth + '" cy="' + emuHeight + '"/>' +
+      '<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="' + shapeId + '" name="' + xmlEscape(name) + '"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
+      '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="' + emuWidth + '" cy="' + emuHeight + '"/></xdr:xfrm>' +
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + relationshipId + '"/></a:graphicData></a:graphic>' +
+      '</xdr:graphicFrame><xdr:clientData/></xdr:oneCellAnchor>';
+  }
+
+  function attendanceChartXml(endRow) {
+    const catAxis = '48650112';
+    const valAxis = '48672768';
+    const categories = "'Students'!$B$2:$B$" + endRow;
+    const values = "'Students'!$R$2:$R$" + endRow;
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-'<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-'<c:lang val="en-US"/><c:chart>' + makeExcelChartTitle('Student Attendance by Student') +
-'<c:plotArea><c:layout/><c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>' +
-'<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>\'Students\'!$R$1</c:f>' + makeStringCache(['Attendance %']) + '</c:strRef></c:tx>' +
-'<c:cat><c:strRef><c:f>' + categoriesFormula + '</c:f>' + makeStringCache(names) + '</c:strRef></c:cat>' +
-'<c:val><c:numRef><c:f>' + valuesFormula + '</c:f>' + makeNumberCache(values) + '</c:numRef></c:val>' +
-'</c:ser><c:gapWidth val="55"/><c:overlap val="0"/><c:axId val="' + catAxis + '"/><c:axId val="' + valAxis + '"/></c:barChart>' +
-'<c:catAx><c:axId val="' + catAxis + '"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + valAxis + '"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx>' +
-'<c:valAx><c:axId val="' + valAxis + '"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/><c:max val="100"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + catAxis + '"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>' +
-'</c:plotArea><c:legend><c:legendPos val="b"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+      '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/><c:chart>' +
+      makeExcelChartTitle('Student Attendance by Student') + '<c:autoTitleDeleted val="0"/>' +
+      '<c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>' +
+      '<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>\'Students\'!$R$1</c:f></c:strRef></c:tx>' +
+      '<c:cat><c:strRef><c:f>' + xmlEscape(categories) + '</c:f></c:strRef></c:cat>' +
+      '<c:val><c:numRef><c:f>' + xmlEscape(values) + '</c:f></c:numRef></c:val></c:ser>' +
+      '<c:gapWidth val="65"/><c:axId val="' + catAxis + '"/><c:axId val="' + valAxis + '"/></c:barChart>' +
+      '<c:catAx><c:axId val="' + catAxis + '"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>' +
+      '<c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + valAxis + '"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>' +
+      '<c:valAx><c:axId val="' + valAxis + '"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/><c:max val="100"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines/>' +
+      '<c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="' + catAxis + '"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>' +
+      '</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
   }
 
-  function makeFeeStatusChartXml(students) {
-    const categories = ['Paid', 'Pending', 'Partly paid', 'Scholarship'];
-    const values = categories.map(category => students.filter(student => (student.profile.feeStatus || 'Unknown') === category).length);
+  function feeStatusChartXml() {
+    const categories = "'Academic Analysis'!$A$17:$A$20";
+    const values = "'Academic Analysis'!$B$17:$B$20";
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-'<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-'<c:lang val="en-US"/><c:chart>' + makeExcelChartTitle('Student Fee Status Distribution') +
-'<c:plotArea><c:layout/><c:pieChart><c:varyColors val="1"/><c:ser><c:idx val="0"/><c:order val="0"/>' +
-'<c:tx><c:v>Student count</c:v></c:tx>' +
-'<c:cat><c:strRef><c:f>\'Academic Analysis\'!$A$17:$A$20</c:f>' + makeStringCache(categories) + '</c:strRef></c:cat>' +
-'<c:val><c:numRef><c:f>\'Academic Analysis\'!$B$17:$B$20</c:f>' + makeNumberCache(values) + '</c:numRef></c:val>' +
-'</c:ser><c:dLbls><c:showLegendKey val="0"/><c:showVal val="1"/><c:showPercent val="1"/><c:showCategoryName val="1"/></c:dLbls></c:pieChart></c:plotArea>' +
-'<c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
+      '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/><c:chart>' +
+      makeExcelChartTitle('Student Fee Status Distribution') + '<c:autoTitleDeleted val="0"/>' +
+      '<c:plotArea><c:layout/><c:pieChart><c:varyColors val="1"/>' +
+      '<c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>Student count</c:v></c:tx>' +
+      '<c:cat><c:strRef><c:f>' + xmlEscape(categories) + '</c:f></c:strRef></c:cat>' +
+      '<c:val><c:numRef><c:f>' + xmlEscape(values) + '</c:f></c:numRef></c:val></c:ser>' +
+      '<c:dLbls><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="1"/><c:showPercent val="1"/><c:showSerName val="0"/><c:showBubbleSize val="0"/></c:dLbls>' +
+      '<c:firstSliceAng val="0"/></c:pieChart></c:plotArea>' +
+      '<c:legend><c:legendPos val="r"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>';
   }
 
-  function chartDrawingXml() {
-    const anchor = (id, name, rid, fromCol, toCol) => '<xdr:twoCellAnchor editAs="oneCell">' +
-'<xdr:from><xdr:col>' + fromCol + '</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
-'<xdr:to><xdr:col>' + toCol + '</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>19</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>' +
-'<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="' + id + '" name="' + xmlEscape(name) + '"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
-'<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>' +
-'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="' + rid + '"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>';
-    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-'<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
-anchor(2, 'Attendance by Student', 'rId1', 3, 11) +
-anchor(3, 'Fee Status Distribution', 'rId2', 12, 20) +
-'</xdr:wsDr>';
-  }
+  async function appendExcelChart(zip, drawingPath, chartPath, chartXml, chartName, anchor) {
+    const drawingRelsPath = packageRelsPath(drawingPath);
+    let drawingRels = zip.file(drawingRelsPath)
+      ? await zip.file(drawingRelsPath).async('string')
+      : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    const chartRelId = nextRelationshipId(drawingRels);
+    const chartIndex = Number((chartPath.match(/chart(\d+)\.xml$/) || [])[1]);
+    const relTarget = '../charts/chart' + chartIndex + '.xml';
+    drawingRels = appendRelationship(drawingRels, chartRelId, 'chart', relTarget);
+    zip.file(drawingRelsPath, drawingRels);
 
-  function addContentTypeOverride(xml, partName, contentType) {
-    if (xml.includes('PartName="' + partName + '"')) return xml;
-    return xml.replace('</Types>', '<Override PartName="' + partName + '" ContentType="' + contentType + '"/></Types>');
+    let drawingXml = await zip.file(drawingPath).async('string');
+    const shapeIds = [...drawingXml.matchAll(/<xdr:cNvPr\b[^>]*\bid="(\d+)"/g)].map(match => Number(match[1]));
+    const shapeId = (shapeIds.length ? Math.max(...shapeIds) : 0) + 1;
+    const anchorXml = chartAnchorXml(shapeId, chartName, chartRelId, anchor.col, anchor.row, anchor.width, anchor.height);
+    if (!drawingXml.includes('</xdr:wsDr>')) throw new Error('The chart drawing part has an invalid root element.');
+    drawingXml = drawingXml.replace('</xdr:wsDr>', anchorXml + '</xdr:wsDr>');
+    zip.file(drawingPath, drawingXml);
+    zip.file(chartPath, chartXml);
+
+    let contentTypes = await zip.file('[Content_Types].xml').async('string');
+    const drawingPartName = '/' + drawingPath;
+    if (!contentTypes.includes('PartName="' + drawingPartName + '"')) {
+      contentTypes = contentTypes.replace('</Types>', '<Override PartName="' + drawingPartName + '" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+    }
+    const chartPartName = '/' + chartPath;
+    if (!contentTypes.includes('PartName="' + chartPartName + '"')) {
+      contentTypes = contentTypes.replace('</Types>', '<Override PartName="' + chartPartName + '" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>');
+    }
+    zip.file('[Content_Types].xml', contentTypes);
   }
 
   async function attachAcademicCharts(xlsxBytes, students) {
-    if (!window.JSZip?.loadAsync) throw new Error('The Excel chart package helper did not load. Please refresh the page and try exporting again.');
-    const zip = await JSZip.loadAsync(xlsxBytes);
-    const workbookXml = await zip.file('xl/workbook.xml').async('string');
-    const workbookRels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
-    const sheetTag = (workbookXml.match(/<sheet\b[^>]*name="Academic Analysis"[^>]*\/>/) || [])[0];
-    if (!sheetTag) throw new Error('Academic Analysis worksheet was not found in the exported workbook.');
-    const sheetRid = (sheetTag.match(/\br:id="([^"]+)"/) || [])[1];
-    if (!sheetRid) throw new Error('Academic Analysis worksheet relationship is missing.');
-    const sheetRelTag = (workbookRels.match(/<Relationship\b[^>]*\/>/g) || []).find(tag => tag.includes('Id="' + sheetRid + '"'));
-    const sheetTarget = sheetRelTag && (sheetRelTag.match(/\bTarget="([^"]+)"/) || [])[1];
-    if (!sheetTarget) throw new Error('Could not locate the Academic Analysis worksheet file.');
-    const sheetPath = sheetTarget.startsWith('/') ? sheetTarget.slice(1) : sheetTarget.startsWith('xl/') ? sheetTarget : 'xl/' + sheetTarget;
-    const sheetXml = await zip.file(sheetPath).async('string');
-    const sheetRelsPath = sheetPath.replace(/([^/]+\.xml)$/, '_rels/$1.rels');
-    let contentTypes = await zip.file('[Content_Types].xml').async('string');
-    let worksheetXml = sheetXml;
-    if (!/xmlns:r=/.test(worksheetXml.slice(0, worksheetXml.indexOf('>')))) {
-      worksheetXml = worksheetXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+    const ZipLibrary = window.JSZip || (typeof JSZip !== 'undefined' ? JSZip : null);
+    if (!ZipLibrary?.loadAsync) throw new Error('The Excel chart helper did not load. Refresh the page and try again.');
+    if (!students.length) throw new Error('There are no student records to chart.');
+    const zip = await ZipLibrary.loadAsync(xlsxBytes);
+    const { sheetPath, drawingPath } = await ensureAcademicAnalysisDrawing(zip);
+    const endRow = students.length + 1;
+    const firstChartIndex = nextPackagePartIndex(zip, /^xl\/charts\/chart(\d+)\.xml$/);
+    const secondChartIndex = firstChartIndex + 1;
+
+    await appendExcelChart(
+      zip, drawingPath,
+      'xl/charts/chart' + firstChartIndex + '.xml',
+      attendanceChartXml(endRow),
+      'Student Attendance by Student',
+      { col: 3, row: 1, width: 620, height: 360 }
+    );
+    await appendExcelChart(
+      zip, drawingPath,
+      'xl/charts/chart' + secondChartIndex + '.xml',
+      feeStatusChartXml(),
+      'Student Fee Status Distribution',
+      { col: 15, row: 1, width: 620, height: 360 }
+    );
+
+    // Validate the complete worksheet -> drawing -> charts relationship chain before download.
+    const finalSheetXml = await zip.file(sheetPath).async('string');
+    const drawingRefs = [...finalSheetXml.matchAll(/<drawing\b[^>]*\br:id="([^"]+)"/g)].map(match => match[1]);
+    if (drawingRefs.length !== 1) throw new Error('Expected exactly one chart drawing on Academic Analysis; found ' + drawingRefs.length + '.');
+    const sheetRelsXml = await zip.file(packageRelsPath(sheetPath)).async('string');
+    const finalDrawingPath = resolvePackageTarget(sheetPath, relationshipTarget(sheetRelsXml, drawingRefs[0]));
+    if (finalDrawingPath !== drawingPath) throw new Error('The Academic Analysis drawing relationship does not resolve to the chart drawing.');
+    const finalDrawingXml = await zip.file(drawingPath).async('string');
+    const chartRelationshipIds = [...finalDrawingXml.matchAll(/<c:chart\b[^>]*\br:id="([^"]+)"/g)].map(match => match[1]);
+    if (chartRelationshipIds.length !== 2) throw new Error('Expected two chart anchors; found ' + chartRelationshipIds.length + '.');
+    const drawingRelsXml = await zip.file(packageRelsPath(drawingPath)).async('string');
+    chartRelationshipIds.forEach(id => {
+      const target = relationshipTarget(drawingRelsXml, id);
+      const chartPartPath = resolvePackageTarget(drawingPath, target);
+      if (!zip.file(chartPartPath)) throw new Error('Missing chart part: ' + chartPartPath);
+      // Chart filenames are checked against the expected files below.
+      const required = chartPartPath.endsWith('chart' + firstChartIndex + '.xml') || chartPartPath.endsWith('chart' + secondChartIndex + '.xml');
+      if (!required) throw new Error('Unexpected chart target: ' + chartPartPath);
+    });
+    const chartXml1 = await zip.file('xl/charts/chart' + firstChartIndex + '.xml').async('string');
+    const chartXml2 = await zip.file('xl/charts/chart' + secondChartIndex + '.xml').async('string');
+    if (!/<c:chartSpace\b/.test(chartXml1) || !/<c:ser>/.test(chartXml1) || !/<c:chartSpace\b/.test(chartXml2) || !/<c:ser>/.test(chartXml2)) {
+      throw new Error('The generated chart parts failed structural validation.');
     }
-    if (!worksheetXml.includes('<drawing ')) worksheetXml = worksheetXml.replace('</worksheet>', '<drawing r:id="rIdAceCharts"/></worksheet>');
-    zip.file(sheetPath, worksheetXml);
-    zip.file(sheetRelsPath, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdAceCharts" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
-    zip.file('xl/drawings/drawing1.xml', chartDrawingXml());
-    zip.file('xl/drawings/_rels/drawing1.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart2.xml"/></Relationships>');
-    zip.file('xl/charts/chart1.xml', makeAttendanceChartXml(students));
-    zip.file('xl/charts/chart2.xml', makeFeeStatusChartXml(students));
-    contentTypes = addContentTypeOverride(contentTypes, '/xl/drawings/drawing1.xml', 'application/vnd.openxmlformats-officedocument.drawing+xml');
-    contentTypes = addContentTypeOverride(contentTypes, '/xl/charts/chart1.xml', 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml');
-    contentTypes = addContentTypeOverride(contentTypes, '/xl/charts/chart2.xml', 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml');
-    zip.file('[Content_Types].xml', contentTypes);
-    const updatedWorkbookXml = workbookXml.includes('<calcPr ')
-      ? workbookXml.replace(/<calcPr\b[^>]*\/>/, '<calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>')
-      : workbookXml.replace('</workbook>', '<calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>');
-    zip.file('xl/workbook.xml', updatedWorkbookXml);
+
     return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', compression: 'DEFLATE' });
   }
 
@@ -1175,10 +1314,10 @@ anchor(3, 'Fee Status Distribution', 'rId2', 12, 20) +
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
-        toast('Excel workbook downloaded with seven worksheets, formulas and two charts.');
+        toast('Excel downloaded: 7 sheets, 14 formulas, attendance chart and fee-status chart. Open the Academic Analysis tab.');
       } catch (error) {
         console.error('Ace Records Excel export failed:', error);
-        toast('Excel export could not add formulas and charts. Please refresh the page and try again.', 'error');
+        toast('Excel export error: ' + (error?.message || 'Could not build the charts. Refresh and retry.'), 'error');
       }
     } else {
       toast('Excel export needs the XLSX and chart helper libraries. Refresh the page and try again.', 'error');
