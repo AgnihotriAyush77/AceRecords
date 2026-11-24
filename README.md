@@ -83,6 +83,18 @@ All demonstration student accounts use password `ayush@2525`.
 
 > **Public demo credential warning:** This GitHub repository and README are public. Anyone who can view this README can see the demonstration password and use the sample accounts. These accounts and records are for classroom demonstration only. Do not use this password or fictional demo setup for real university accounts.
 
+## Preloaded demonstration activities
+
+Three upcoming, sign-up-ready activities are automatically added to fresh and existing browser databases when they migrate to version 6. Their dates are generated relative to the day the sample events are first added; registration closes 3–4 days before each event.
+
+| Demo activity | Event date | Registration closes | Time | Venue |
+|---|---|---|---|---|
+| AI & Innovation Buildathon 2026 | 10 days after first load | 7 days after first load | 9:30 AM | Innovation Lab, ITM University Campus, Gwalior |
+| Career Readiness: Resume & Mock Interview Workshop | 17 days after first load | 14 days after first load | 11:00 AM | Seminar Hall, ITM University Campus, Gwalior |
+| Inter-Department Sports & Cultural Day | 24 days after first load | 20 days after first load | 9:00 AM | University Sports Ground & Open-Air Stage, ITM University Campus, Gwalior |
+
+Each activity includes a description and schedule, organiser, eligibility, preparation requirements and student registration deadline. The resume workshop has a 60-registration limit. Students can register from the **Activities** tab; their registrations appear under **My signed-up activities**. Staff can see sign-up counts. Reserved IDs `DEMO-EVT-001` through `DEMO-EVT-003` prevent duplicate seeding. Existing activities and sign-ups are retained.
+
 ## Run the website
 
 1. Download or clone the repository.
