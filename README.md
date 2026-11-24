@@ -7,29 +7,21 @@ Ace Records is a cheerful, responsive student record management demo built with 
 ## Current features
 
 - Separate Student, Faculty and Admin login roles with role-based navigation.
-- One demo student account is preloaded; additional student accounts are created by Admin; Faculty can view and edit student records.
+- One demo student account is preloaded; additional student accounts are created by Admin; Faculty can view, edit and delete student records.
 - Faculty can create student accounts, set each student's password, and enter profile details, Class X/XII marks, CGPA, and SGPA, attendance, credits and backlogs for all eight semesters.
 - Faculty can edit student academic records and semester details.
 - Students can request record corrections and attach supporting documents; faculty must approve the evidence before the official record changes.
 - Faculty can view corrections for a specific student or review the complete approval inbox.
 - Only Admin can create, edit and delete faculty accounts. Faculty can see only their own account details. The currently signed-in account and the last remaining faculty account cannot be deleted.
-- Only Admin can publish, edit and delete college activities. Students can sign up before the published registration deadline and view their own signed-up activities.
+- Admin and Faculty can publish activities. Faculty can edit and delete activities they created; Admin can manage all activities. Students can sign up before the published registration deadline and view their own signed-up activities.
 - Audit trail is Admin-only and logs logins, account changes, activity sign-ups, corrections and approvals. Students and Faculty do not see the audit trail.
 - Excel export is restricted to faculty and creates worksheets for Students, Academics, Activities, Correction Requests, Audit Trail and Summary.
 - College enquiry button appears on the login page only and opens a prewritten email to AgnihotriAyush77@gmail.com.
 - Copyright footer links to Ayush Agnihotri's LinkedIn profile in a new tab.
 
-## Demo credentials
+## Account access
 
-| Role | Email | Password |
-|---|---|---|
-| Student | `ayush@student.demo` | `student123` |
-| Faculty | `faculty@ace.demo` | `manish@itmuni` |
-| Admin | `admin@ace.demo` | `AceAdmin@2026` |
-
-The faculty account displays as **Manish Gupta**. Faculty login is typed manually; there is no faculty demo-fill button.
-
-Course and department dropdowns use ITM University's published programme and school listings. Published activities have an event date and a separate student registration deadline.
+The login page uses one shared email-and-password form. The account role is identified automatically after successful sign-in. Administrators provision account credentials and share them directly with each user; no quick-access credentials are displayed on the login page.
 
 ## Run the website
 
